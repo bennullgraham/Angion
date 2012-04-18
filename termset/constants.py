@@ -10,3 +10,6 @@ CREATE_TERM_CHANCE = Decimal(0.1)
 
 # chance to delete a term
 DELETE_TERM_CHANCE = Decimal(0.1)
+
+# how many segments has each point?
+BRANCHING_FACTOR = 3

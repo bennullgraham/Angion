@@ -3,10 +3,7 @@ from math import sin, e
 from termset import constants
 from random import choice, random, seed
 from decimal import *
-
-
-class Solution(models.Model):
-	parent = models.ForeignKey('self', null=True)
+from solution import Solution
 
 
 class TermSet(models.Model):
