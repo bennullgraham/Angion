@@ -12,7 +12,7 @@ MANAGERS = ADMINS
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': '/home/bgraham/dev_py/angion/db.sqlite3',
+        'NAME': '/home/bgraham/Documents/github/Angion/db.sqlite3',
         'USER': '',
         'PASSWORD': '',
         'HOST': '',
@@ -115,7 +115,7 @@ INSTALLED_APPS = (
     'django.contrib.sites',
     'django.contrib.messages',
     'django.contrib.staticfiles',
-    'termset'
+    'termset',
     'solution'
     # Uncomment the next line to enable the admin:
     # 'django.contrib.admin',
