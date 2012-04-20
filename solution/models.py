@@ -13,7 +13,7 @@ class TermSet(models.Model):
 
 	def f(self, x):
 		terms = self.baseterm_set.all()
-		s = sum((map(lambda a: a.f(x), terms)))
+		s = sum(map(lambda f: f.f(x), terms))
 		return s
 
 	def mutate(self):
@@ -27,7 +27,11 @@ class TermSet(models.Model):
 		# potentially create a new term. always do so if there are none.
 		if not terms or random() > (1 - constants.CREATE_TERM_CHANCE):
 			seed()
-			bt = BaseTerm(term_set_id=self.pk, term_type=choice(('EXP', 'POLY', 'TRIG')))
+			ttype = choice(('EXP', 'POLY', 'TRIG', 'CNST'))
+			if not terms:
+				# first term always a constant
+				ttype = 'CNST'
+			bt = BaseTerm(term_set_id=self.pk, term_type=ttype)
 			bt.mutate()
 			bt.save()
 
@@ -45,6 +49,7 @@ class BaseTerm(models.Model):
 		(u'EXP',  u'Exponential'),
 		(u'POLY', u'Polynomial'),
 		(u'TRIG', u'Trigonometric'),
+		(u'CNST', u'Constant'),
 	)
 	outerMultiplier = models.FloatField(default=1.0)
 	innerMultiplier = models.FloatField(default=1.0)
@@ -58,35 +63,50 @@ class BaseTerm(models.Model):
 			f = '{:.2}.sin({:.2}x)'
 		elif self.term_type == 'POLY':
 			f = '{:.2}.x^{:.2}'
+		elif self.term_type == 'CNST':
+			f = '({:.2}+{:.2})'
 		else:
 			return super(BaseTerm, self).__unicode__()
 
 		return f.format(self.outerMultiplier, self.innerMultiplier)
 
 	def f(self, x):
-		# x = x
+		fx = None
 		if self.term_type == 'EXP':
-			f = self.outerMultiplier * (x ** self.innerMultiplier)
+			f = lambda i, o, x: o * (x ** i)
 		elif self.term_type == 'TRIG':
-			f = self.outerMultiplier * sin(x * self.innerMultiplier)
+			f = lambda i, o, x: o * sin(x * i)
 		elif self.term_type == 'POLY':
-			f = self.outerMultiplier * (e ** (x * self.innerMultiplier))
+			f = lambda i, o, x: o * e ** (x * i)
+		elif self.term_type == 'CNST':
+			f = lambda i, o, x: o + i
 		else:
 			raise Exception("Term type unknown")
 
-		# we are definitely going to generate infinities
-		if f > 1e100:
-			return 1e100
-		elif f < -1e100:
-			return -1e100
-		else:
-			return f
+		while fx == None:
+			print "calculating..."
+			try:
+				fx = f(self.innerMultiplier, self.outerMultiplier, x)
+			except OverflowError:
+				print "Overflowed: " + self.__unicode__()
+				# do some fuzzing and reduction to try and avoid an overflow
+				self.innerMultiplier = (self.innerMultiplier + random()) / constants.OVERFLOW_REDUCTION_DIVISOR
+				self.outerMultiplier = (self.outerMultiplier + random()) / constants.OVERFLOW_REDUCTION_DIVISOR
+				pass
+			except Exception:
+				fx = 0
+				pass
+
+		print self.__unicode__() + " = " + str(fx) + ", x = " + str(x)
+		return fx
 
 	def mutate(self):
 		def scale(x):
 			seed()
 			vary = (random() - 0.5) * constants.MUTE_VARIABILITY * 2 * max(0.1, abs(x))
 			x = x + vary
+			if x > -0.1 and x < 0.1:
+				x = scale(x)
 			return x
 		self.innerMultiplier = scale(self.innerMultiplier)
 		self.outerMultiplier = scale(self.outerMultiplier)
@@ -133,7 +153,7 @@ class Point(object):
 		self.y = y
 
 	def dist_to_origin(self):
-		return hypot(self.x, self.y)
+		return min(constants.PLOT_SIZE, hypot(self.x - constants.ORIGIN_X, self.y - constants.ORIGIN_Y), key=abs)
 
 	def radiance(self, solution):
 		dist = self.dist_to_origin()
@@ -146,18 +166,15 @@ class Point(object):
 	def segments(self, solution):
 		orientation = self.orientation(solution)
 		radiance = self.radiance(solution)
-		radiance_begin = orientation - (radiance / 2)
-		# radiance_end = orientation + (radiance / 2)
-		step = radiance / (constants.BRANCHING_FACTOR - 1)
+		sweep_begin = orientation - (radiance / 2)
+		sweep_step = radiance / (constants.BRANCHING_FACTOR - 1)
 		segments = []
 
-		if step == 0:
+		if sweep_step == 0:
 			segments.append(Segment(self, orientation))
 		else:
 			for n in range(0, constants.BRANCHING_FACTOR):
-				segments.append(Segment(self, radiance_begin + (step * n)))
-			# for angle in range(radiance_begin, radiance_end, step):
-			# 	segments.append(Segment(self, angle))
+				segments.append(Segment(self, sweep_begin + (sweep_step * n)))
 		return segments
 
 
@@ -171,8 +188,9 @@ class Segment(object):
 		return solution.length_function.f(dist)
 
 	def end(self, solution):
-		x = self.base.x + self.length(solution) * cos(self.angle)
-		y = self.base.y + self.length(solution) * sin(self.angle)
+		bound = lambda x: min(max(0, x), constants.PLOT_SIZE)
+		x = bound(self.base.x + self.length(solution) * cos(self.angle))
+		y = bound(self.base.y + self.length(solution) * sin(self.angle))
 		return Point(x, y)
 
 
@@ -180,11 +198,12 @@ class Plot(object):
 	segments = []
 
 	def __init__(self, solution):
-		self.origin = Point(64, 64)
+		self.origin = Point(constants.ORIGIN_X, constants.ORIGIN_Y)
 		self.solution = solution
 
 	def draw(self, seq):
-		im = Image.new('RGBA', (128, 128), (30, 30, 30, 255))
+		print "Drawing..."
+		im = Image.new('RGBA', (constants.PLOT_SIZE, constants.PLOT_SIZE), (30, 30, 30, 255))
 		draw = ImageDraw.Draw(im)
 		for segment in self.origin.segments(self.solution):
 			end = segment.end(self.solution)
@@ -198,4 +217,12 @@ class Plot(object):
 					end3 = segment3.end(self.solution)
 					draw.line(((end2.x, end2.y), (end3.x, end3.y)))
 					print '  from ' + end2.__unicode__() + ' to ' + end3.__unicode__()
-		im.save("out.png." + str(seq), "PNG")
+					for segment4 in end3.segments(self.solution):
+						end4 = segment4.end(self.solution)
+						draw.line(((end3.x, end3.y), (end4.x, end4.y)))
+						print '  from ' + end3.__unicode__() + ' to ' + end4.__unicode__()
+						for segment5 in end4.segments(self.solution):
+							end5 = segment5.end(self.solution)
+							draw.line(((end4.x, end4.y), (end5.x, end5.y)))
+							print '  from ' + end4.__unicode__() + ' to ' + end5.__unicode__()
+		im.save("/home/bgraham/Documents/github/Angion/out." + str(seq) + ".png", "PNG")
