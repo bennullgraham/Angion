@@ -43,6 +43,15 @@ class TermSet(models.Model):
 				t.save()
 				mutate_count += 1
 
+	def copy(self):
+		orig_terms = self.baseterm_set.all()
+		ts = TermSet()
+		ts.save()
+		for orig_term in orig_terms:
+			new_term = orig_term.copy(term_set_id=ts.id)
+			new_term.save()
+		return ts
+
 
 class BaseTerm(models.Model):
 	TERM_TYPES = (
@@ -84,7 +93,6 @@ class BaseTerm(models.Model):
 			raise Exception("Term type unknown")
 
 		while fx == None:
-			print "calculating..."
 			try:
 				fx = f(self.innerMultiplier, self.outerMultiplier, x)
 			except OverflowError:
@@ -97,7 +105,7 @@ class BaseTerm(models.Model):
 				fx = 0
 				pass
 
-		print self.__unicode__() + " = " + str(fx) + ", x = " + str(x)
+		# print self.__unicode__() + " = " + str(fx) + ", x = " + str(x)
 		return fx
 
 	def mutate(self):
@@ -110,6 +118,15 @@ class BaseTerm(models.Model):
 			return x
 		self.innerMultiplier = scale(self.innerMultiplier)
 		self.outerMultiplier = scale(self.outerMultiplier)
+		return self
+
+	def copy(self, term_set_id):
+		c = BaseTerm()
+		c.innerMultiplier = self.innerMultiplier
+		c.outerMultiplier = self.outerMultiplier
+		c.term_type = self.term_type
+		c.term_set_id = term_set_id
+		return c
 
 
 class Solution(models.Model):
@@ -119,9 +136,7 @@ class Solution(models.Model):
 	orientation_function = models.OneToOneField(TermSet, related_name='solution_orientation_function')
 	termination_function = models.OneToOneField(TermSet, related_name='solution_termination_function')
 
-	def __init__(self, *args, **kwargs):
-		super(Solution, self).__init__(*args, **kwargs)
-
+	def prime(self):
 		def create_termset():
 			ts = TermSet()
 			ts.save()
@@ -131,26 +146,59 @@ class Solution(models.Model):
 		self.radiance_function = create_termset()
 		self.orientation_function = create_termset()
 		self.termination_function = create_termset()
-		self.plot = Plot(self)
 
 	def mutate(self):
 		self.length_function.mutate()
 		self.radiance_function.mutate()
 		self.orientation_function.mutate()
 		self.termination_function.mutate()
+		return self
 
-# from django.db.models.signals import post_save
-# from signals import create_initial_data
-# post_save.connect(create_initial_data, sender=Foo)
+	def copy(self):
+		s = Solution()
+		s.length_function = self.length_function.copy()
+		s.radiance_function = self.length_function.copy()
+		s.orientation_function = self.length_function.copy()
+		s.termination_function = self.length_function.copy()
+		return s
 
+	def point_set(self):
+		origin = Point(constants.ORIGIN_X, constants.ORIGIN_Y, depth=0)
+		points = []
+
+		def recurse(base):
+			points.append(base)
+			if base.depth < 4:
+				for segment in base.segments(self):
+					recurse(segment.end(self))
+		recurse(origin)
+		return points
+
+	# def fitness(self):
+	# 	def minimum_service_distance(point):
+	# 		return min([hypot(point.x - g_x, point.y - g_y)
+	# 			for g_x in range(0, constants.PLOT_SIZE, 16)
+	# 			for g_y in range(0, constants.PLOT_SIZE, 16)], key=abs)
+	# 	score = 1 / sum(map(minimum_service_distance, self.point_set()))
+	# 	return score
+
+	def fitness(self):
+		def minimum_service_distance(point):
+			return min([hypot(point[0] - s.x, point[1] - s.y) for s in point_set], key=abs)
+		eval_set = [(x, y) for x in range(0, constants.PLOT_SIZE, 16) for y in range(0, constants.PLOT_SIZE, 16)]
+		point_set = self.point_set()
+		score = 1 / sum(map(minimum_service_distance, eval_set))
+		return score
+		
 
 class Point(object):
 	def __unicode__(self):
 		return str(self.x) + ', ' + str(self.y)
 
-	def __init__(self, x, y):
+	def __init__(self, x, y, depth=0):
 		self.x = x
 		self.y = y
+		self.depth = depth
 
 	def dist_to_origin(self):
 		return min(constants.PLOT_SIZE, hypot(self.x - constants.ORIGIN_X, self.y - constants.ORIGIN_Y), key=abs)
@@ -188,10 +236,10 @@ class Segment(object):
 		return solution.length_function.f(dist)
 
 	def end(self, solution):
-		bound = lambda x: min(max(0, x), constants.PLOT_SIZE)
-		x = bound(self.base.x + self.length(solution) * cos(self.angle))
-		y = bound(self.base.y + self.length(solution) * sin(self.angle))
-		return Point(x, y)
+		#bound = lambda x: min(max(0, x), constants.PLOT_SIZE)
+		x = self.base.x + self.length(solution) * cos(self.angle)
+		y = self.base.y + self.length(solution) * sin(self.angle)
+		return Point(x, y, self.base.depth + 1)
 
 
 class Plot(object):
@@ -205,24 +253,10 @@ class Plot(object):
 		print "Drawing..."
 		im = Image.new('RGBA', (constants.PLOT_SIZE, constants.PLOT_SIZE), (30, 30, 30, 255))
 		draw = ImageDraw.Draw(im)
-		for segment in self.origin.segments(self.solution):
-			end = segment.end(self.solution)
-			draw.line(((self.origin.x, self.origin.y), (end.x, end.y)))
-			print 'from ' + self.origin.__unicode__() + ' to ' + end.__unicode__()
-			for segment2 in end.segments(self.solution):
-				end2 = segment2.end(self.solution)
-				draw.line(((end.x, end.y), (end2.x, end2.y)))
-				print ' from ' + end.__unicode__() + ' to ' + end2.__unicode__()
-				for segment3 in end2.segments(self.solution):
-					end3 = segment3.end(self.solution)
-					draw.line(((end2.x, end2.y), (end3.x, end3.y)))
-					print '  from ' + end2.__unicode__() + ' to ' + end3.__unicode__()
-					for segment4 in end3.segments(self.solution):
-						end4 = segment4.end(self.solution)
-						draw.line(((end3.x, end3.y), (end4.x, end4.y)))
-						print '  from ' + end3.__unicode__() + ' to ' + end4.__unicode__()
-						for segment5 in end4.segments(self.solution):
-							end5 = segment5.end(self.solution)
-							draw.line(((end4.x, end4.y), (end5.x, end5.y)))
-							print '  from ' + end4.__unicode__() + ' to ' + end5.__unicode__()
-		im.save("/home/bgraham/Documents/github/Angion/out." + str(seq) + ".png", "PNG")
+		points = self.solution.point_set()
+		for point in points:
+			for segment in point.segments(self.solution):
+				end = segment.end(self.solution)
+				draw.line(((point.x, point.y), (end.x, end.y)))
+
+		im.save("/home/bgraham/dev_py/angion/out." + str(seq) + ".png", "PNG")

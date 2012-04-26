@@ -11,11 +11,12 @@ MANAGERS = ADMINS
 
 DATABASES = {
     'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': '/home/bgraham/Documents/github/Angion/db.sqlite3',
-        'USER': '',
+        'ENGINE': 'django.db.backends.mysql',
+        #'NAME': '/home/bgraham/dev_py/angion/db.sqlite3',
+        'NAME': 'angion',
+        'USER': 'root',
         'PASSWORD': '',
-        'HOST': '',
+        'HOST': 'localhost',
         'PORT': '',
     }
 }

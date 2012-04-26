@@ -1,7 +1,7 @@
 # amount to vary terms by if mutating. 0.1 = +/- 10%.
-MUTE_VARIABILITY = 0.05
+MUTE_VARIABILITY = 0.5
 
-NUM_MUTE_TERMS = 3
+NUM_MUTE_TERMS = 10
 
 # chance to add new terms to a term set
 CREATE_TERM_CHANCE = 0.2
