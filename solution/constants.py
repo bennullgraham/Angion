@@ -1,5 +1,5 @@
 # amount to vary terms by if mutating. 0.1 = +/- 10%.
-MUTE_VARIABILITY = 0.5
+MUTE_VARIABILITY = 0.3
 
 NUM_MUTE_TERMS = 10
 
@@ -19,3 +19,5 @@ PLOT_SIZE = 256
 
 ORIGIN_X = PLOT_SIZE / 2
 ORIGIN_Y = PLOT_SIZE / 2
+
+RECURSION_LIMIT = 6

@@ -168,27 +168,25 @@ class Solution(models.Model):
 
 		def recurse(base):
 			points.append(base)
-			if base.depth < 4:
+			if base.depth < constants.RECURSION_LIMIT and not base.terminate(self):
 				for segment in base.segments(self):
 					recurse(segment.end(self))
 		recurse(origin)
 		return points
 
-	# def fitness(self):
-	# 	def minimum_service_distance(point):
-	# 		return min([hypot(point.x - g_x, point.y - g_y)
-	# 			for g_x in range(0, constants.PLOT_SIZE, 16)
-	# 			for g_y in range(0, constants.PLOT_SIZE, 16)], key=abs)
-	# 	score = 1 / sum(map(minimum_service_distance, self.point_set()))
-	# 	return score
-
 	def fitness(self):
 		def minimum_service_distance(point):
 			return min([hypot(point[0] - s.x, point[1] - s.y) for s in point_set], key=abs)
+
+		def point_length(point):
+			return sum([segment.length(self) for segment in point.segments(self)])
+
 		eval_set = [(x, y) for x in range(0, constants.PLOT_SIZE, 16) for y in range(0, constants.PLOT_SIZE, 16)]
 		point_set = self.point_set()
-		score = 1 / sum(map(minimum_service_distance, eval_set))
-		return score
+		service_penalty = sum(map(minimum_service_distance, eval_set))
+		length_penalty = (sum(map(point_length, point_set)) / 100) ** 2
+		# print "  service: {}, length: {}".format(service_penalty, length_penalty)
+		return 1 / (service_penalty + length_penalty)
 		
 
 class Point(object):
@@ -199,16 +197,17 @@ class Point(object):
 		self.x = x
 		self.y = y
 		self.depth = depth
+		self.dist_to_origin = self._dist_to_origin()
 
-	def dist_to_origin(self):
+	def _dist_to_origin(self):
 		return min(constants.PLOT_SIZE, hypot(self.x - constants.ORIGIN_X, self.y - constants.ORIGIN_Y), key=abs)
 
 	def radiance(self, solution):
-		dist = self.dist_to_origin()
+		dist = self.dist_to_origin
 		return solution.radiance_function.f(dist)
 
 	def orientation(self, solution):
-		dist = self.dist_to_origin()
+		dist = self.dist_to_origin
 		return solution.orientation_function.f(dist)
 
 	def segments(self, solution):
@@ -225,6 +224,11 @@ class Point(object):
 				segments.append(Segment(self, sweep_begin + (sweep_step * n)))
 		return segments
 
+	def terminate(self, solution):
+		return False
+		dist = self.dist_to_origin
+		return 1 / solution.termination_function.f(dist) < 0.5
+
 
 class Segment(object):
 	def __init__(self, base, angle):
@@ -232,8 +236,8 @@ class Segment(object):
 		self.angle = angle
 
 	def length(self, solution):
-		dist = self.base.dist_to_origin()
-		return solution.length_function.f(dist)
+		dist = self.base.dist_to_origin
+		return max(0, solution.length_function.f(dist))
 
 	def end(self, solution):
 		#bound = lambda x: min(max(0, x), constants.PLOT_SIZE)
@@ -254,9 +258,11 @@ class Plot(object):
 		im = Image.new('RGBA', (constants.PLOT_SIZE, constants.PLOT_SIZE), (30, 30, 30, 255))
 		draw = ImageDraw.Draw(im)
 		points = self.solution.point_set()
+		points.reverse()
 		for point in points:
+			c = 255 / (point.depth / 2 + 1)
 			for segment in point.segments(self.solution):
 				end = segment.end(self.solution)
-				draw.line(((point.x, point.y), (end.x, end.y)))
+				draw.line((point.x, point.y, end.x, end.y), fill="rgb({r},{g},{b})".format(r=c, g=c, b=c))
 
 		im.save("/home/bgraham/dev_py/angion/out." + str(seq) + ".png", "PNG")
