@@ -1,6 +1,7 @@
 from math import sin, cos, e, pi, hypot, copysign
 import sys
 import constants
+import copy
 from random import choice, random, seed
 from PIL import Image, ImageDraw
 from multiprocessing import Pool
@@ -8,14 +9,14 @@ seed()
 
 
 class TermSet(object):
-	def __init__(self, init_terms=[], term_type=None):
+	def __init__(self, init_terms=[]):
 		self.terms = init_terms
 		if not self.terms:
-			self._add_term(term_type)
+			self._add_term()
 
 	def __unicode__(self):
 		from string import join
-		return join(map(lambda s: str(s), self.terms), ' + ')
+		return join(map(lambda s: s.__unicode__(), self.terms), ' + ')
 
 	def f(self, x):
 		f = sum(map(lambda f: f.f(x), self.terms))
@@ -26,11 +27,11 @@ class TermSet(object):
 		else:
 			return f
 
-	def _add_term(self, term_type=None):
-		if term_type == None:
+	def _add_term(self):
+		if len(self.terms) < constants.MAX_TERMS:
 			term_type = choice(BaseTerm.TERM_TYPES)
-		bt = BaseTerm(term_type=term_type)
-		self.terms.append(bt)
+			bt = BaseTerm(term_type=term_type)
+			self.terms.append(bt)
 
 	def _delete_term(self):
 		t = choice(self.terms)
@@ -50,14 +51,9 @@ class TermSet(object):
 		# modify some term constants
 		if self.terms:
 			while mutate_count < constants.NUM_MUTE_TERMS:
-				if random() > 0.5:
-					t = choice(self.terms)
-					t.mutate()
+				t = choice(self.terms)
+				t.mutate()
 				mutate_count += 1
-
-	def copy(self):
-		ts = TermSet(self.terms[:])
-		return ts
 
 
 class BaseTerm(object):
@@ -85,7 +81,7 @@ class BaseTerm(object):
 		else:
 			return "er..."
 
-		return f.format(outer=self.outerMultiplier, inner=self.innerMultiplier)
+		return f.format(outer=float(self.outerMultiplier), inner=float(self.innerMultiplier))
 
 	def f(self, x):
 		fx = None
@@ -117,31 +113,29 @@ class BaseTerm(object):
 
 	def mutate(self):
 		def scale(x):
-			seed()
-			vary = (random() - 0.5) * constants.MUTE_VARIABILITY * 2 * max(0.1, abs(x))
+			if x == 0:
+				return random() - 0.5
+			vary = (random() - 0.5) * constants.MUTE_VARIABILITY * 2 * abs(x)
 			x = x + vary
-			if x > -0.00001 and x < 0.00001:
-				x = scale(x)
+			if x > 100:
+				x = 100
+			elif x < -100:
+				x = -100
 			return x
 		self.innerMultiplier = scale(self.innerMultiplier)
 		self.outerMultiplier = scale(self.outerMultiplier)
 		return self
 
-	def copy(self):
-		bt = BaseTerm(
-			term_type=self.term_type,
-			innerMultiplier=self.innerMultiplier,
-			outerMultiplier=self.outerMultiplier
-		)
-		return bt
-
 
 class Solution(object):
 	def prime(self):
 		def create_termset():
-			ts = TermSet(term_type='CNST')
-			ts.mutate()
-			return ts
+			seed()
+			ts = TermSet()
+			r = copy.deepcopy(ts)
+			r.mutate()
+			return r
+
 		self.fitness = 0
 		self.length_function = create_termset()
 		self.radiance_function = create_termset()
@@ -154,14 +148,6 @@ class Solution(object):
 		self.orientation_function.mutate()
 		self.termination_function.mutate()
 		return self
-
-	def copy(self):
-		s = Solution()
-		s.length_function = self.length_function.copy()
-		s.radiance_function = self.length_function.copy()
-		s.orientation_function = self.length_function.copy()
-		s.termination_function = self.length_function.copy()
-		return s
 
 	def point_set(self):
 		origin = OriginPoint()
@@ -199,7 +185,7 @@ class Solution(object):
 		point_set = self.point_set()
 
 		service_penalty = sum(map(minimum_service_distance, eval_set)) ** 0.5
-		length_penalty = sum(map(point_length, point_set))
+		length_penalty = sum(map(point_length, point_set)) ** 0.5
 		bounds_penalty = sum(map(bounds_penalty, point_set))
 
 		# print "  service: {}, length: {}".format(service_penalty, length_penalty)
@@ -349,13 +335,13 @@ pool = Pool(8)
 
 def cross(s1, s2):
 	sn = Solution()
-	sn.length_function = s1.length_function if random() > 0.5 else s2.length_function
-	sn.radiance_function = s1.radiance_function if random() > 0.5 else s2.radiance_function
-	sn.orientation_function = s1.orientation_function if random() > 0.5 else s2.orientation_function
-	sn.termination_function = s1.termination_function if random() > 0.5 else s2.termination_function
+	sn.length_function = copy.deepcopy(s1.length_function) if random() > 0.5 else copy.deepcopy(s2.length_function)
+	sn.radiance_function = copy.deepcopy(s1.radiance_function) if random() > 0.5 else copy.deepcopy(s2.radiance_function)
+	sn.orientation_function = copy.deepcopy(s1.orientation_function) if random() > 0.5 else copy.deepcopy(s2.orientation_function)
+	sn.termination_function = copy.deepcopy(s1.termination_function) if random() > 0.5 else copy.deepcopy(s2.termination_function)
 	return sn
 
-for lap in range(10000):
+for lap in range(100000):
 	candidates = sorted(solutions, key=lambda s: s.fitness)[:3]
 	solutions = candidates[:]  # keep the best few from previous round
 	solutions = map(lambda s: s.mutate(), solutions)  # stir
@@ -371,7 +357,13 @@ for lap in range(10000):
 	this_fit = fittest.fitness
 	improvement = 0 if last_fit == 0 else (this_fit / last_fit) - 1
 
-	if last_fit != this_fit or lap == 0 or lap % 250 == 0:
-		print "{lap}: {fitness} ({improvement:+.2%})".format(lap=lap, fitness=this_fit, improvement=improvement)
+	if last_fit != this_fit or lap == 0:
 		p = Plot(fittest)
 		p.draw(lap)
+		print "{lap}: {fitness} ({improvement:+.2%})".format(lap=lap, fitness=this_fit, improvement=improvement)
+		print "       length:      {length_function}".format(length_function=fittest.length_function.__unicode__())
+		print "       radiance:    {radiance_function}".format(radiance_function=fittest.radiance_function.__unicode__())
+		print "       orientation: {orientation_function}".format(orientation_function=fittest.orientation_function.__unicode__())
+		print ""
+	elif lap % 1000 == 0:
+		print "{lap}".format(lap=lap)
