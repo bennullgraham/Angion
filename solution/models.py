@@ -1,27 +1,34 @@
-from math import sin, cos, e, pi, hypot, copysign, log
+from math import sin, cos, e, pi, hypot, copysign
 import sys
 import constants
 from random import choice, random, seed
 from PIL import Image, ImageDraw
 from multiprocessing import Pool
+seed()
 
 
 class TermSet(object):
-	def __init__(self, terms=[]):
-		self.terms = terms
+	def __init__(self, init_terms=[], term_type=None):
+		self.terms = init_terms
 		if not self.terms:
-			self._add_term()
+			self._add_term(term_type)
 
 	def __unicode__(self):
 		from string import join
 		return join(map(lambda s: str(s), self.terms), ' + ')
 
 	def f(self, x):
-		return sum(map(lambda f: f.f(x), self.terms))
+		f = sum(map(lambda f: f.f(x), self.terms))
+		if f > sys.float_info.max:
+			return sys.float_info.max
+		elif f < -sys.float_info.max:
+			return -sys.float_info.max
+		else:
+			return f
 
-	def _add_term(self):
-		seed()
-		term_type = choice(BaseTerm.TERM_TYPES)
+	def _add_term(self, term_type=None):
+		if term_type == None:
+			term_type = choice(BaseTerm.TERM_TYPES)
 		bt = BaseTerm(term_type=term_type)
 		self.terms.append(bt)
 
@@ -33,7 +40,7 @@ class TermSet(object):
 		mutate_count = 0
 
 		# maybe delete a term
-		if self.terms and random() > (1 - constants.DELETE_TERM_CHANCE):
+		if self.terms and random() > (1 - (constants.DELETE_TERM_CHANCE * len(self.terms))):
 			self._delete_term()
 
 		# potentially create a new term. always do so if there are none.
@@ -113,7 +120,7 @@ class BaseTerm(object):
 			seed()
 			vary = (random() - 0.5) * constants.MUTE_VARIABILITY * 2 * max(0.1, abs(x))
 			x = x + vary
-			if x > -0.1 and x < 0.1:
+			if x > -0.00001 and x < 0.00001:
 				x = scale(x)
 			return x
 		self.innerMultiplier = scale(self.innerMultiplier)
@@ -132,7 +139,7 @@ class BaseTerm(object):
 class Solution(object):
 	def prime(self):
 		def create_termset():
-			ts = TermSet()
+			ts = TermSet(term_type='CNST')
 			ts.mutate()
 			return ts
 		self.fitness = 0
@@ -157,7 +164,7 @@ class Solution(object):
 		return s
 
 	def point_set(self):
-		origin = Point(constants.ORIGIN_X, constants.ORIGIN_Y, depth=0)
+		origin = OriginPoint()
 		points = []
 
 		def recurse(base):
@@ -171,7 +178,7 @@ class Solution(object):
 	def solve(self):
 		def minimum_service_distance(point):
 			try:
-				return min([hypot(point[0] - s.x, point[1] - s.y) for s in point_set], key=abs)
+				return min([(point[0] - s.x) ** 2 + (point[1] - s.y) ** 2 for s in point_set], key=abs)
 			except OverflowError:
 				return sys.float_info.max
 
@@ -181,24 +188,36 @@ class Solution(object):
 			except OverflowError:
 				return sys.float_info.max
 
-		eval_set = [(x, y) for x in range(0, constants.PLOT_SIZE, 32) for y in range(0, constants.PLOT_SIZE, 32)]
+		def bounds_penalty(point):
+			if point.x < constants.PLOT_MARGIN or point.x > (constants.PLOT_SIZE - constants.PLOT_MARGIN):
+				return 10000
+			if point.y < constants.PLOT_MARGIN or point.y > (constants.PLOT_SIZE - constants.PLOT_MARGIN):
+				return 10000
+			return 0
+
+		eval_set = [(x, y) for x in range(constants.PLOT_MARGIN, constants.PLOT_SIZE - constants.PLOT_MARGIN, 16) for y in range(constants.PLOT_MARGIN, constants.PLOT_SIZE - constants.PLOT_MARGIN, 16)]
 		point_set = self.point_set()
-		service_penalty = sum(map(minimum_service_distance, eval_set))
-		length_penalty = (sum(map(point_length, point_set)) / 10)
+
+		service_penalty = sum(map(minimum_service_distance, eval_set)) ** 0.5
+		length_penalty = sum(map(point_length, point_set))
+		bounds_penalty = sum(map(bounds_penalty, point_set))
+
 		# print "  service: {}, length: {}".format(service_penalty, length_penalty)
-		self.fitness = 1 / (service_penalty + length_penalty)
+		self.fitness = 1 / (service_penalty + length_penalty + bounds_penalty)
 		return self
-		
+
 
 class Point(object):
 	def __unicode__(self):
 		return str(self.x) + ', ' + str(self.y)
 
-	def __init__(self, x, y, depth=0):
+	def __init__(self, x, y, depth=0, parent_orientation=0):
 		self.x = x
 		self.y = y
 		self.depth = depth
 		self.dist_to_origin = self._dist_to_origin()
+		self.parent_orientation = parent_orientation
+		self.segment_count = constants.BRANCHING_FACTOR
 
 	def _dist_to_origin(self):
 		try:
@@ -211,23 +230,24 @@ class Point(object):
 
 	def radiance(self, solution):
 		dist = self.dist_to_origin
-		return solution.radiance_function.f(dist) % (2 * pi)
+		return solution.radiance_function.f(dist)  # % pi  # -90 --> +90
 
 	def orientation(self, solution):
 		dist = self.dist_to_origin
-		return solution.orientation_function.f(dist) % (2 * pi)
+		delta = solution.orientation_function.f(dist)  # % (pi * 2 / 8)) - ((pi * 2 / 8) / 2)  # -22.5 --> +22.5
+		return self.parent_orientation + delta
 
 	def segments(self, solution):
-		orientation = self.orientation(solution)
-		radiance = self.radiance(solution)
+		orientation = self.orientation(solution) % (2 * pi)
+		radiance = self.radiance(solution) % (2 * pi)
 		sweep_begin = orientation - (radiance / 2)
-		sweep_step = radiance / (constants.BRANCHING_FACTOR - 1)
+		sweep_step = radiance / (self.segment_count)
 		segments = []
 
 		if sweep_step == 0:
 			segments.append(Segment(self, orientation))
 		else:
-			for n in range(0, constants.BRANCHING_FACTOR):
+			for n in range(0, self.segment_count):
 				segments.append(Segment(self, sweep_begin + (sweep_step * n)))
 		return segments
 
@@ -237,6 +257,23 @@ class Point(object):
 		return 1 / solution.termination_function.f(dist) < 0.5
 
 
+class OriginPoint(Point):
+
+	def __init__(self):
+		self.x = constants.ORIGIN_X
+		self.y = constants.ORIGIN_Y
+		self.depth = 0
+		self.dist_to_origin = 0
+		self.parent_orientation = 0
+		self.segment_count = 4
+
+	def radiance(self, solution):
+		return 2 * pi
+
+	def orientation(self, solution):
+		return 0
+
+
 class Segment(object):
 	def __init__(self, base, angle):
 		self.base = base
@@ -244,35 +281,52 @@ class Segment(object):
 
 	def length(self, solution):
 		dist = self.base.dist_to_origin
-		length = max(0, solution.length_function.f(dist))
-		return log(length + 1) * 10
+		#try:
+		return abs(solution.length_function.f(dist))
+		#except OverflowError:
+		#	return sys.float_info.max
+		#	pass
 
 	def end(self, solution):
 		# bound = lambda x: min(max(0, x), constants.PLOT_SIZE)
-		x = self.base.x + self.length(solution) * cos(self.angle)
-		y = self.base.y + self.length(solution) * sin(self.angle)
-		return Point(x, y, self.base.depth + 1)
+		try:
+			x = self.base.x + self.length(solution) * cos(self.angle)
+			y = self.base.y + self.length(solution) * sin(self.angle)
+			return Point(x, y, self.base.depth + 1, self.angle)
+		except ValueError:
+			print "valueerror"
+			print self.length(solution)
+			print self.angle
+		except e:
+			raise e
 
 
 class Plot(object):
 	segments = []
 
 	def __init__(self, solution):
-		self.origin = Point(constants.ORIGIN_X, constants.ORIGIN_Y)
 		self.solution = solution
 
 	def draw(self, seq):
 		im = Image.new('RGBA', (constants.PLOT_SIZE, constants.PLOT_SIZE), (30, 30, 30, 255))
 		draw = ImageDraw.Draw(im)
+		draw.line((
+			(constants.PLOT_MARGIN, constants.PLOT_MARGIN),
+			(constants.PLOT_MARGIN, constants.PLOT_SIZE - constants.PLOT_MARGIN),
+			(constants.PLOT_SIZE - constants.PLOT_MARGIN, constants.PLOT_SIZE - constants.PLOT_MARGIN),
+			(constants.PLOT_SIZE - constants.PLOT_MARGIN, constants.PLOT_MARGIN),
+			(constants.PLOT_MARGIN, constants.PLOT_MARGIN)),
+			fill="rgb(0,0,0)"
+		)
 		points = self.solution.point_set()
 		points.reverse()
 		for point in points:
-			c = 255 - (point.depth * 32)
+			c = 255 - (200 * point.depth) / constants.RECURSION_LIMIT
 			for segment in point.segments(self.solution):
 				end = segment.end(self.solution)
 				draw.line((point.x, point.y, end.x, end.y), fill="rgb({r},{g},{b})".format(r=c, g=c, b=c))
 
-		im.save("/home/bgraham/dev_py/angion/out." + str(seq) + ".png", "PNG")
+		im.save("out." + str(seq) + ".png", "PNG")
 
 
 def solve(solution):
@@ -301,13 +355,13 @@ def cross(s1, s2):
 	sn.termination_function = s1.termination_function if random() > 0.5 else s2.termination_function
 	return sn
 
-for lap in range(100):
-	candidates = sorted(solutions, key=lambda s: s.fitness)[:2]
-	solutions.extend(candidates)  # keep the best few from previous round
-	solutions.extend([cross(s1, s2) for s1 in candidates for s2 in candidates])  # mix up the best few from previous round
-	solutions.extend([new_solution() for n in range(2)])  # add some fresh solutions
-
+for lap in range(10000):
+	candidates = sorted(solutions, key=lambda s: s.fitness)[:3]
+	solutions = candidates[:]  # keep the best few from previous round
 	solutions = map(lambda s: s.mutate(), solutions)  # stir
+	solutions.extend([cross(s1, s2) for s1 in candidates for s2 in candidates])  # mix up the best few from previous round
+	solutions.append(new_solution())  # add a fresh solution
+
 	solutions = pool.map(solve, solutions)  # compute point-sets and fitnesses
 
 	solutions.append(fittest)  # keep the best from last round, un-mutated
@@ -317,7 +371,7 @@ for lap in range(100):
 	this_fit = fittest.fitness
 	improvement = 0 if last_fit == 0 else (this_fit / last_fit) - 1
 
-	print "fitness = {fitness} ({improvement:+.2%})".format(lap=lap, fitness=this_fit, improvement=improvement)
-
-	p = Plot(fittest)
-	p.draw(lap)
+	if last_fit != this_fit or lap == 0 or lap % 250 == 0:
+		print "{lap}: {fitness} ({improvement:+.2%})".format(lap=lap, fitness=this_fit, improvement=improvement)
+		p = Plot(fittest)
+		p.draw(lap)
