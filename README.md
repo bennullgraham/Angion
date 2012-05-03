@@ -1,6 +1,6 @@
 Angion
 ===================
-![Example output](readme/fractal.png)
+![Example output](https://github.com/bennullgraham/Angion/blob/master/readme/fractal.png)
 
 Running
 -------------------
