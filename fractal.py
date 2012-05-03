@@ -64,7 +64,7 @@ class BaseTerm(object):
 		(u'CNST'),
 	)
 
-	def __init__(self, term_type, innerMultiplier=1, outerMultiplier=1):
+	def __init__(self, term_type, innerMultiplier=1.0, outerMultiplier=1.0):
 		self.term_type = term_type
 		self.innerMultiplier = innerMultiplier
 		self.outerMultiplier = outerMultiplier
@@ -112,14 +112,10 @@ class BaseTerm(object):
 
 	def mutate(self):
 		def scale(x):
-			return uniform(-1, 1)
-			return random() * constants.MUTE_VARIABILITY * abs(x) * choice([-1, constants.MUTE_POSITIVE_BIAS])
-			# if x > 100:
-			# 	x = 100
-			# elif x < -100:
-			# 	x = -100
-		self.innerMultiplier += scale(self.innerMultiplier)
-		self.outerMultiplier += scale(self.outerMultiplier)
+			return triangular(-2, 2)
+			# return uniform(-1, 1 * constants.MUTE_POSITIVE_BIAS) * constants.MUTE_VARIABILITY * abs(x)
+		self.innerMultiplier += uniform(-0.1, 0.1)  # scale(self.innerMultiplier)
+		self.outerMultiplier += uniform(-0.1, 0.1)  # scale(self.outerMultiplier)
 		return self
 
 
@@ -150,7 +146,7 @@ class Solution(object):
 	def solve(self):
 		def minimum_service_distance(point):
 			try:
-				return min([(point[0] - s.x) ** 2 + (point[1] - s.y) ** 2 for s in point_set], key=abs)
+				return min([hypot(point[0] - s.x, point[1] - s.y) for s in point_set], key=abs)
 			except OverflowError:
 				return sys.float_info.max
 
@@ -162,16 +158,19 @@ class Solution(object):
 
 		def bounds_penalty(point):
 			if point.x < constants.PLOT_MARGIN or point.x > (constants.PLOT_SIZE - constants.PLOT_MARGIN):
-				return 10000
+				return 1000
 			if point.y < constants.PLOT_MARGIN or point.y > (constants.PLOT_SIZE - constants.PLOT_MARGIN):
-				return 10000
+				return 1000
 			return 0
 
-		eval_set = [(x, y) for x in range(constants.PLOT_MARGIN, constants.PLOT_SIZE - constants.PLOT_MARGIN, 16) for y in range(constants.PLOT_MARGIN, constants.PLOT_SIZE - constants.PLOT_MARGIN, 16)]
+		eval_set = [(x, y)
+			for x in range(constants.PLOT_MARGIN, constants.PLOT_SIZE - constants.PLOT_MARGIN, constants.SERVICE_GRID_SPACING)
+			for y in range(constants.PLOT_MARGIN, constants.PLOT_SIZE - constants.PLOT_MARGIN, constants.SERVICE_GRID_SPACING)
+		]
 		point_set = self.point_set()
 
 		service_penalty = sum(map(minimum_service_distance, eval_set))
-		length_penalty = sum(map(point_length, point_set))
+		length_penalty = sum(map(point_length, point_set)) ** 0.25
 		bounds_penalty = sum(map(bounds_penalty, point_set))
 
 		self.fitness = 1 / (service_penalty + length_penalty + bounds_penalty + 1)
@@ -188,7 +187,7 @@ class Point(object):
 		self.depth = depth
 		self.dist_to_origin = self._dist_to_origin()
 		self.parent_orientation = parent_orientation
-		self.segment_count = constants.BRANCHING_FACTOR
+		self.segment_count = constants.BRANCHING_FACTOR if self.depth % 3 == 0 else 1
 
 	def _dist_to_origin(self):
 		try:
@@ -223,9 +222,8 @@ class Point(object):
 		return segments
 
 	def terminate(self, solution):
-		return False
 		dist = self.dist_to_origin
-		return 1 / solution.termination_function.f(dist) < 0.5
+		return solution.termination_function.f(dist) > 1
 
 
 class OriginPoint(Point):
@@ -299,10 +297,14 @@ def solve(solution):
 	return solution.solve()
 
 
+def mutate(solution):
+	return solution.mutate()
+
+
 def new_solution():
 
 	def new_baseterm():
-		return BaseTerm('CNST', innerMultiplier=uniform(-10, 10), outerMultiplier=uniform(-10, 10))
+		return BaseTerm(choice(BaseTerm.TERM_TYPES), innerMultiplier=uniform(-2, 2), outerMultiplier=uniform(-5, 5))
 
 	s = Solution()
 	s.length_function = TermSet(init_terms=[new_baseterm()])
@@ -339,14 +341,13 @@ print "Mutation positive bias: {}".format(constants.MUTE_POSITIVE_BIAS)
 print ""
 
 for lap in range(100000):
-	candidates = sorted(solutions, key=lambda s: s.fitness)[:3]
-
+	candidates = sorted(solutions, key=lambda s: s.fitness)[:2]
+	candidates.append(new_solution())
 	# keep and mutate the best few from previous round
-	solutions = [copy.deepcopy(c) for c in candidates]
-	solutions = map(lambda s: s.mutate(), solutions)
+	solutions = pool.map(mutate, [copy.deepcopy(c) for c in candidates])
 
 	# keep the best few from previous round unmutated
-	solutions.extend([copy.deepcopy(c) for c in candidates for n in range(3)])
+	solutions.extend([copy.deepcopy(c) for c in candidates])
 
 	# mix up the functions from the best few from previous round
 	solutions.extend([cross(s1, s2) for s1 in candidates for s2 in candidates])
@@ -366,6 +367,7 @@ for lap in range(100000):
 		print "       length:      {length_function}".format(length_function=fittest.length_function.__unicode__())
 		print "       radiance:    {radiance_function}".format(radiance_function=fittest.radiance_function.__unicode__())
 		print "       orientation: {orientation_function}".format(orientation_function=fittest.orientation_function.__unicode__())
+		print "       termination: {termination_function}".format(termination_function=fittest.termination_function.__unicode__())
 		print ""
 	elif lap % 1000 == 0:
 		print "{lap}".format(lap=lap)
