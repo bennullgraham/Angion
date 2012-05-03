@@ -29,7 +29,7 @@ PLOT_MARGIN = 64
 ORIGIN_X = PLOT_SIZE / 2
 ORIGIN_Y = PLOT_SIZE / 2
 
-RECURSION_LIMIT = 14
+RECURSION_LIMIT = 18
 
 # spacing of grid used to check how well-covered the area is
-SERVICE_GRID_SPACING = 8
+SERVICE_GRID_SPACING = 16

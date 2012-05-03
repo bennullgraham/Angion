@@ -102,11 +102,12 @@ class BaseTerm(object):
 			# return largest float with correct sign
 			i_sign = copysign(1, self.innerMultiplier)
 			o_sign = copysign(1, self.outerMultiplier)
-			fx = copysign(sys.float_info.max, f(i_sign, o_sign, x))
-			# pass
+			x_sign = copysign(1, x)
+			fx = copysign(sys.float_info.max, f(i_sign, o_sign, x_sign))
 		except ZeroDivisionError:
 			fx = 0
-			# pass
+		except ValueError:
+			fx = 0
 
 		return fx
 
@@ -123,6 +124,7 @@ class Solution(object):
 
 	def __init__(self):
 		self.fitness = 0
+		self.total_length = None
 
 	def mutate(self):
 		self.length_function.mutate()
@@ -132,24 +134,21 @@ class Solution(object):
 		return self
 
 	def point_set(self):
+		self.total_length = 0
 		origin = OriginPoint()
 		points = []
 
 		def recurse(base):
 			points.append(base)
 			if base.depth < constants.RECURSION_LIMIT and not base.terminate(self):
-				for segment in base.segments(self):
+				segments = base.segments(self)
+				self.total_length += segments[0].length(self) * len(segments)
+				for segment in segments:
 					recurse(segment.end(self))
 		recurse(origin)
 		return points
 
 	def solve(self):
-		def minimum_service_distance(point):
-			try:
-				return min([hypot(point[0] - s.x, point[1] - s.y) for s in point_set], key=abs)
-			except OverflowError:
-				return sys.float_info.max
-
 		def point_length(point):
 			try:
 				return sum([segment.length(self) for segment in point.segments(self)])
@@ -163,17 +162,18 @@ class Solution(object):
 				return 1000
 			return 0
 
-		eval_set = [(x, y)
-			for x in range(constants.PLOT_MARGIN, constants.PLOT_SIZE - constants.PLOT_MARGIN, constants.SERVICE_GRID_SPACING)
-			for y in range(constants.PLOT_MARGIN, constants.PLOT_SIZE - constants.PLOT_MARGIN, constants.SERVICE_GRID_SPACING)
-		]
 		point_set = self.point_set()
 
-		service_penalty = sum(map(minimum_service_distance, eval_set))
-		length_penalty = sum(map(point_length, point_set)) ** 0.25
-		bounds_penalty = sum(map(bounds_penalty, point_set))
+		def bucket(p):
+			if p.x > constants.PLOT_MARGIN and p.x < constants.PLOT_SIZE - constants.PLOT_MARGIN and p.y > constants.PLOT_MARGIN and p.y < constants.PLOT_SIZE - constants.PLOT_MARGIN:
+				return (p.x // constants.SERVICE_GRID_SPACING, p.y // constants.SERVICE_GRID_SPACING)
 
-		self.fitness = 1 / (service_penalty + length_penalty + bounds_penalty + 1)
+		full_buckets = len(set(map(bucket, point_set)))
+		# empty_buckets = (((constants.PLOT_SIZE - (constants.PLOT_MARGIN * 2)) / constants.SERVICE_GRID_SPACING) ** 2) - full_buckets
+		# length_penalty = max(min(sys.float_info.max, self.total_length), -sys.float_info.max)
+
+		self.fitness = full_buckets  # ** 2 + 10 / int(length_penalty + 1)
+		# print "{}, {}".format(full_buckets ** 2, 1000 / int(length_penalty + 50))
 		return self
 
 
@@ -193,10 +193,7 @@ class Point(object):
 		try:
 			return min(constants.PLOT_SIZE, hypot(self.x - constants.ORIGIN_X, self.y - constants.ORIGIN_Y), key=abs)
 		except OverflowError:
-			return constants.PLOT_SIZE
-			#pass
-		except e:
-			raise e
+			return sys.float_info.max
 
 	def radiance(self, solution):
 		dist = self.dist_to_origin
@@ -222,8 +219,11 @@ class Point(object):
 		return segments
 
 	def terminate(self, solution):
-		dist = self.dist_to_origin
-		return solution.termination_function.f(dist) > 1
+		try:
+			dist = self.dist_to_origin
+			return solution.termination_function.f(dist) > 1
+		except OverflowError:
+			return sys.float_info.max
 
 
 class OriginPoint(Point):
@@ -340,7 +340,7 @@ print "Mutation constant:      {}".format(constants.MUTE_VARIABILITY)
 print "Mutation positive bias: {}".format(constants.MUTE_POSITIVE_BIAS)
 print ""
 
-for lap in range(100000):
+for lap in range(1000000):
 	candidates = sorted(solutions, key=lambda s: s.fitness)[:2]
 	candidates.append(new_solution())
 	# keep and mutate the best few from previous round
