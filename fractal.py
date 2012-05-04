@@ -134,7 +134,7 @@ class Solution(object):
 		return self
 
 	def point_set(self):
-		self.total_length = 0
+		self.total_length = 1
 		origin = OriginPoint()
 		points = []
 
@@ -142,38 +142,54 @@ class Solution(object):
 			points.append(base)
 			if base.depth < constants.RECURSION_LIMIT and not base.terminate(self):
 				segments = base.segments(self)
-				self.total_length += segments[0].length(self) * len(segments)
+				self.total_length += segments[0].length(self)
 				for segment in segments:
 					recurse(segment.end(self))
 		recurse(origin)
 		return points
 
 	def solve(self):
-		def point_length(point):
-			try:
-				return sum([segment.length(self) for segment in point.segments(self)])
-			except OverflowError:
-				return sys.float_info.max
+		def in_bounds(p):
+			if p.x < constants.PLOT_MARGIN or p.x > (constants.PLOT_SIZE - constants.PLOT_MARGIN):
+				return False
+			if p.y < constants.PLOT_MARGIN or p.y > (constants.PLOT_SIZE - constants.PLOT_MARGIN):
+				return False
+			return True
 
-		def bounds_penalty(point):
-			if point.x < constants.PLOT_MARGIN or point.x > (constants.PLOT_SIZE - constants.PLOT_MARGIN):
-				return 1000
-			if point.y < constants.PLOT_MARGIN or point.y > (constants.PLOT_SIZE - constants.PLOT_MARGIN):
-				return 1000
-			return 0
-
-		point_set = self.point_set()
-
-		def bucket(p):
-			if p.x > constants.PLOT_MARGIN and p.x < constants.PLOT_SIZE - constants.PLOT_MARGIN and p.y > constants.PLOT_MARGIN and p.y < constants.PLOT_SIZE - constants.PLOT_MARGIN:
+		def to_service_grid_bucket(p):
+			if in_bounds(p):
 				return (p.x // constants.SERVICE_GRID_SPACING, p.y // constants.SERVICE_GRID_SPACING)
 
-		full_buckets = len(set(map(bucket, point_set)))
-		# empty_buckets = (((constants.PLOT_SIZE - (constants.PLOT_MARGIN * 2)) / constants.SERVICE_GRID_SPACING) ** 2) - full_buckets
-		# length_penalty = max(min(sys.float_info.max, self.total_length), -sys.float_info.max)
+		def point_spacing(points):
+			def ord_spacing(ords):
+				ords.extend([0, constants.PLOT_SIZE])
+				ords.sort()
+				try:
+					return float(sum([(abs(b - a) - 1) ** 2 for a, b in zip(ords, ords[1:])])) ** 0.5
+				except OverflowError:
+					return sys.float_info.max
+			x = [p.x for p in point_set]
+			y = [p.y for p in point_set]
+			return ord_spacing(x) + ord_spacing(y)
 
-		self.fitness = full_buckets  # ** 2 + 10 / int(length_penalty + 1)
-		# print "{}, {}".format(full_buckets ** 2, 1000 / int(length_penalty + 50))
+		def length_penalty():
+			try:
+				return sum([abs(min(0, self.length_function.f(x) - 10) ** 2) for x in range(0, constants.PLOT_SIZE / 2, constants.SERVICE_GRID_SPACING)])
+			except OverflowError:
+				return sys.float_info.max
+		point_set = self.point_set()
+		spacing_score = 1.0 / point_spacing(point_set)
+		self.fitness = spacing_score
+		# point_set = self.point_set()
+		# filled_buckets = len(set(map(to_service_grid_bucket, point_set)))
+		# bounds_penalty = len(point_set) - len(filter(in_bounds, point_set))
+		# point_set.sort(key=lambda p: p.depth)
+		# spacing_score = 1.0 / (point_spacing(point_set) / 10)
+		# length_score = 1.0 / (1 + length_penalty())
+		# bucket_score = float(filled_buckets) / 10.0
+		# print spacing_score
+		# self.fitness = spacing_score + length_score + bucket_score - bounds_penalty
+
 		return self
 
 
@@ -187,7 +203,7 @@ class Point(object):
 		self.depth = depth
 		self.dist_to_origin = self._dist_to_origin()
 		self.parent_orientation = parent_orientation
-		self.segment_count = constants.BRANCHING_FACTOR if self.depth % 3 == 0 else 1
+		self.segment_count = 1 if self.depth % constants.BRANCH_DISTANCE else constants.BRANCH_SEGMENTS
 
 	def _dist_to_origin(self):
 		try:
@@ -201,7 +217,7 @@ class Point(object):
 
 	def orientation(self, solution):
 		dist = self.dist_to_origin
-		delta = solution.orientation_function.f(dist)  # % (pi * 2 / 8)) - ((pi * 2 / 8) / 2)  # -22.5 --> +22.5
+		delta = solution.orientation_function.f(dist)
 		return (self.parent_orientation + delta) % (2 * pi)
 
 	def segments(self, solution):
@@ -221,9 +237,9 @@ class Point(object):
 	def terminate(self, solution):
 		try:
 			dist = self.dist_to_origin
-			return solution.termination_function.f(dist) > 1
+			return solution.termination_function.f(dist) < self.depth
 		except OverflowError:
-			return sys.float_info.max
+			return True
 
 
 class OriginPoint(Point):
@@ -285,7 +301,7 @@ class Plot(object):
 		# sort by depth so oldest segments are drawn on top
 		points.sort(key=lambda p: -p.depth)
 		for point in points:
-			fill = colour_lookup(float(point.depth) / constants.RECURSION_LIMIT)
+			fill = colour_lookup(float(point.depth) / (points[0].depth + 1))
 			for segment in point.segments(self.solution):
 				end = segment.end(self.solution)
 				if end.x >= 0 and end.y >= 0 and end.x <= constants.PLOT_SIZE and end.y <= constants.PLOT_SIZE:
@@ -316,10 +332,10 @@ def new_solution():
 candidates = []
 solutions = []
 fittest = Solution()
-fittest.length_function = TermSet(init_terms=[BaseTerm('CNST', innerMultiplier=4, outerMultiplier=4)])
-fittest.radiance_function = TermSet(init_terms=[BaseTerm('CNST', innerMultiplier=3, outerMultiplier=3)])
-fittest.orientation_function = TermSet(init_terms=[BaseTerm('CNST', innerMultiplier=0, outerMultiplier=0)])
-fittest.termination_function = TermSet(init_terms=[BaseTerm('CNST', innerMultiplier=0, outerMultiplier=0)])
+fittest.length_function = TermSet(init_terms=[BaseTerm('CNST', innerMultiplier=2.0, outerMultiplier=4.0)])
+fittest.radiance_function = TermSet(init_terms=[BaseTerm('CNST', innerMultiplier=1.0, outerMultiplier=1.0)])
+fittest.orientation_function = TermSet(init_terms=[BaseTerm('CNST', innerMultiplier=0.0, outerMultiplier=0.0)])
+fittest.termination_function = TermSet(init_terms=[BaseTerm('POLY', innerMultiplier=1.0, outerMultiplier=1.0)])
 fittest.solve()
 
 solutions.append(fittest)
@@ -336,13 +352,9 @@ def cross(s1, s2):
 	sn.termination_function = copy.deepcopy(s1.termination_function) if random() > 0.5 else copy.deepcopy(s2.termination_function)
 	return sn
 
-print "Mutation constant:      {}".format(constants.MUTE_VARIABILITY)
-print "Mutation positive bias: {}".format(constants.MUTE_POSITIVE_BIAS)
-print ""
-
 for lap in range(1000000):
 	candidates = sorted(solutions, key=lambda s: s.fitness)[:2]
-	candidates.append(new_solution())
+	candidates.extend([new_solution() for n in range(1)])
 	# keep and mutate the best few from previous round
 	solutions = pool.map(mutate, [copy.deepcopy(c) for c in candidates])
 
@@ -350,7 +362,7 @@ for lap in range(1000000):
 	solutions.extend([copy.deepcopy(c) for c in candidates])
 
 	# mix up the functions from the best few from previous round
-	solutions.extend([cross(s1, s2) for s1 in candidates for s2 in candidates])
+	solutions.extend([cross(s1, s2) for s1 in candidates for s2 in candidates for n in range(1)])
 
 	solutions = pool.map(solve, solutions)  # compute point-sets and fitnesses
 	solutions.append(fittest)  # keep the best from last round, un-mutated
