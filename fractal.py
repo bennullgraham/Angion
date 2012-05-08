@@ -1,4 +1,4 @@
-from math import sin, cos, e, pi, hypot, copysign
+from math import sin, cos, e, pi, hypot, copysign, log
 import sys
 import constants
 import copy
@@ -51,15 +51,16 @@ class TermSet(object):
 		# modify some term constants
 		if self.terms:
 			while mutate_count < constants.NUM_MUTE_TERMS:
-				t = choice(self.terms)
-				t.mutate()
+				if random() > constants.MUTE_CHANCE:
+					t = choice(self.terms)
+					t.mutate()
 				mutate_count += 1
 
 
 class BaseTerm(object):
 	TERM_TYPES = (
-		(u'EXP'),
-		(u'POLY'),
+		# (u'EXP'),
+		# (u'POLY'),
 		(u'TRIG'),
 		(u'CNST'),
 	)
@@ -112,11 +113,8 @@ class BaseTerm(object):
 		return fx
 
 	def mutate(self):
-		def scale(x):
-			return triangular(-2, 2)
-			# return uniform(-1, 1 * constants.MUTE_POSITIVE_BIAS) * constants.MUTE_VARIABILITY * abs(x)
-		self.innerMultiplier += uniform(-0.1, 0.1)  # scale(self.innerMultiplier)
-		self.outerMultiplier += uniform(-0.1, 0.1)  # scale(self.outerMultiplier)
+		self.innerMultiplier += uniform(-constants.MUTE_VARIABILITY, -constants.MUTE_VARIABILITY)
+		self.outerMultiplier += uniform(-constants.MUTE_VARIABILITY, -constants.MUTE_VARIABILITY)
 		return self
 
 
@@ -168,28 +166,29 @@ class Solution(object):
 					return float(sum([(abs(b - a) - 1) ** 2 for a, b in zip(ords, ords[1:])])) ** 0.5
 				except OverflowError:
 					return sys.float_info.max
-			x = [p.x for p in point_set]
-			y = [p.y for p in point_set]
+			x = [p.x for p in points]
+			y = [p.y for p in points]
 			return ord_spacing(x) + ord_spacing(y)
 
 		def length_penalty():
-			try:
-				return sum([abs(min(0, self.length_function.f(x) - 10) ** 2) for x in range(0, constants.PLOT_SIZE / 2, constants.SERVICE_GRID_SPACING)])
-			except OverflowError:
-				return sys.float_info.max
-		point_set = self.point_set()
-		spacing_score = 1.0 / point_spacing(point_set)
-		self.fitness = spacing_score
-		# point_set = self.point_set()
-		# filled_buckets = len(set(map(to_service_grid_bucket, point_set)))
-		# bounds_penalty = len(point_set) - len(filter(in_bounds, point_set))
-		# point_set.sort(key=lambda p: p.depth)
-		# spacing_score = 1.0 / (point_spacing(point_set) / 10)
-		# length_score = 1.0 / (1 + length_penalty())
-		# bucket_score = float(filled_buckets) / 10.0
-		# print spacing_score
-		# self.fitness = spacing_score + length_score + bucket_score - bounds_penalty
+			# try:
+			# 	len = sum([abs(min(0, self.length_function.f(x) - 10) ** 2) for x in range(0, constants.PLOT_SIZE / 2, constants.SERVICE_GRID_SPACING)])
+			# except OverflowError:
+			# 	len = sys.float_info.max
+			return self.total_length / len(point_set)
 
+		def depth_penalty(point_set):
+			return max(1.0, (point_set[-1].depth - 6))
+
+		point_set = self.point_set()
+		point_set.sort(key=lambda p: p.depth)
+		bounds_penalty = (len(point_set) - len(filter(in_bounds, point_set)))
+
+		buckets = map(to_service_grid_bucket, point_set)
+		coverage_score = len(set(buckets))
+		duplicate_penalty = (len(buckets) - coverage_score - 10)
+		# print coverage_score, duplicate_penalty, bounds_penalty
+		self.fitness = ((coverage_score ** 2) - duplicate_penalty - (bounds_penalty ** 2) - length_penalty()) / depth_penalty(point_set)
 		return self
 
 
@@ -281,10 +280,14 @@ class Plot(object):
 		self.solution = solution
 
 	def draw(self, seq):
-		def colour_lookup(ratio):
+		def colour_lookup(ratio, shade=False):
 			r = 000 + (ratio * (42 - 000))
 			g = 150 + (ratio * (22 - 150))
 			b = 255 + (ratio * (69 - 255))
+			if shade:
+				r /= 4.0
+				g /= 4.0
+				b /= 4.0
 			return "rgb({},{},{})".format(int(r), int(g), int(b))
 
 		im = Image.new('RGBA', (constants.PLOT_SIZE, constants.PLOT_SIZE), (10, 4, 27, 255))
@@ -300,6 +303,16 @@ class Plot(object):
 		points = self.solution.point_set()
 		# sort by depth so oldest segments are drawn on top
 		points.sort(key=lambda p: -p.depth)
+
+		# for point in points:
+		# 	fill = colour_lookup(float(point.depth) / (points[0].depth + 1), shade=True)
+		# 	service_x = (point.x // constants.SERVICE_GRID_SPACING) * constants.SERVICE_GRID_SPACING
+		# 	service_y = (point.y // constants.SERVICE_GRID_SPACING) * constants.SERVICE_GRID_SPACING
+		# 	draw.rectangle(
+		# 		(service_x + 1, service_y + 1, service_x + constants.SERVICE_GRID_SPACING - 1, service_y + constants.SERVICE_GRID_SPACING - 1),
+		# 		fill=fill  # "rgb(25,20,37,20)"
+		# 	)
+
 		for point in points:
 			fill = colour_lookup(float(point.depth) / (points[0].depth + 1))
 			for segment in point.segments(self.solution):
@@ -332,10 +345,10 @@ def new_solution():
 candidates = []
 solutions = []
 fittest = Solution()
-fittest.length_function = TermSet(init_terms=[BaseTerm('CNST', innerMultiplier=2.0, outerMultiplier=4.0)])
-fittest.radiance_function = TermSet(init_terms=[BaseTerm('CNST', innerMultiplier=1.0, outerMultiplier=1.0)])
+fittest.length_function = TermSet(init_terms=[BaseTerm('CNST', innerMultiplier=3.0, outerMultiplier=3.0)])
+fittest.radiance_function = TermSet(init_terms=[BaseTerm('CNST', innerMultiplier=0.5, outerMultiplier=0.5)])
 fittest.orientation_function = TermSet(init_terms=[BaseTerm('CNST', innerMultiplier=0.0, outerMultiplier=0.0)])
-fittest.termination_function = TermSet(init_terms=[BaseTerm('POLY', innerMultiplier=1.0, outerMultiplier=1.0)])
+fittest.termination_function = TermSet(init_terms=[BaseTerm('CNST', innerMultiplier=3.0, outerMultiplier=2.0)])
 fittest.solve()
 
 solutions.append(fittest)

@@ -2,8 +2,11 @@
 # Function terms #
 ##################
 
+# 0 -> 1 chance a term will be mutated at all
+MUTE_CHANCE = 0.5
+
 # amount to vary terms by if mutating. 0.1 = +/- 10%.
-MUTE_VARIABILITY = 1.5
+MUTE_VARIABILITY = 0.1
 
 # scaled pos/neg adjustements aren't repeatable (e.g. 20 -10% + 10% =/= 20)
 # so we need a positive bias to adjust for it
@@ -31,16 +34,16 @@ BRANCH_SEGMENTS = 2
 BRANCH_DISTANCE = 3
 
 # Hard limit at this depth
-RECURSION_LIMIT = 25
+RECURSION_LIMIT = 20
 
 ##################
 # Plotting       #
 ##################
 
-PLOT_SIZE = 512
+PLOT_SIZE = 1024
 PLOT_MARGIN = 64
-ORIGIN_X = PLOT_SIZE / 2
-ORIGIN_Y = PLOT_SIZE / 2
+ORIGIN_X = PLOT_SIZE / 2.0
+ORIGIN_Y = PLOT_SIZE / 2.0
 
 
 ##################
@@ -48,4 +51,4 @@ ORIGIN_Y = PLOT_SIZE / 2
 ##################
 
 # spacing of grid used to check how well-covered the area is.
-SERVICE_GRID_SPACING = 8
+SERVICE_GRID_SPACING = 32
