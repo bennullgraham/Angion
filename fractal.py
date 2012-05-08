@@ -158,37 +158,19 @@ class Solution(object):
 			if in_bounds(p):
 				return (p.x // constants.SERVICE_GRID_SPACING, p.y // constants.SERVICE_GRID_SPACING)
 
-		def point_spacing(points):
-			def ord_spacing(ords):
-				ords.extend([0, constants.PLOT_SIZE])
-				ords.sort()
-				try:
-					return float(sum([(abs(b - a) - 1) ** 2 for a, b in zip(ords, ords[1:])])) ** 0.5
-				except OverflowError:
-					return sys.float_info.max
-			x = [p.x for p in points]
-			y = [p.y for p in points]
-			return ord_spacing(x) + ord_spacing(y)
-
-		def length_penalty():
-			# try:
-			# 	len = sum([abs(min(0, self.length_function.f(x) - 10) ** 2) for x in range(0, constants.PLOT_SIZE / 2, constants.SERVICE_GRID_SPACING)])
-			# except OverflowError:
-			# 	len = sys.float_info.max
-			return self.total_length / len(point_set)
-
-		def depth_penalty(point_set):
-			return max(1.0, (point_set[-1].depth - 6))
+		def service_level(eval_point):
+			return min([hypot(eval_point[0] - p[0], eval_point[1] - p[1]) for p in quantised_point_set])
 
 		point_set = self.point_set()
-		point_set.sort(key=lambda p: p.depth)
-		bounds_penalty = (len(point_set) - len(filter(in_bounds, point_set)))
-
-		buckets = map(to_service_grid_bucket, point_set)
-		coverage_score = len(set(buckets))
-		duplicate_penalty = (len(buckets) - coverage_score - 10)
-		# print coverage_score, duplicate_penalty, bounds_penalty
-		self.fitness = ((coverage_score ** 2) - duplicate_penalty - (bounds_penalty ** 2) - length_penalty()) / depth_penalty(point_set)
+		valid_point_set = filter(in_bounds, point_set)
+		quantised_point_set = set(map(to_service_grid_bucket, valid_point_set))
+		eval_set = [(x, y)
+			for x in range(constants.PLOT_MARGIN, constants.PLOT_SIZE - constants.PLOT_MARGIN, constants.SERVICE_GRID_SPACING)
+			for y in range(constants.PLOT_MARGIN, constants.PLOT_SIZE - constants.PLOT_MARGIN, constants.SERVICE_GRID_SPACING)
+		]
+		self.service_penalty = sum(map(service_level, eval_set))
+		self.length_penalty = max(0.0, (self.total_length / len(point_set)) - 10.0)
+		self.fitness = 1.0 / (self.service_penalty + self.length_penalty)
 		return self
 
 
@@ -393,6 +375,7 @@ for lap in range(1000000):
 		print "       radiance:    {radiance_function}".format(radiance_function=fittest.radiance_function.__unicode__())
 		print "       orientation: {orientation_function}".format(orientation_function=fittest.orientation_function.__unicode__())
 		print "       termination: {termination_function}".format(termination_function=fittest.termination_function.__unicode__())
+		print "       penalties:   service [{service_penalty:.2}] length [{length_penalty:.2}]".format(service_penalty=fittest.service_penalty, length_penalty=fittest.length_penalty)
 		print ""
 	elif lap % 1000 == 0:
 		print "{lap}".format(lap=lap)

@@ -6,7 +6,7 @@
 MUTE_CHANCE = 0.5
 
 # amount to vary terms by if mutating. 0.1 = +/- 10%.
-MUTE_VARIABILITY = 0.1
+MUTE_VARIABILITY = 0.5
 
 # scaled pos/neg adjustements aren't repeatable (e.g. 20 -10% + 10% =/= 20)
 # so we need a positive bias to adjust for it
@@ -18,7 +18,7 @@ NUM_MUTE_TERMS = 1
 MAX_TERMS = 3
 
 # chance to add new terms to a term set
-CREATE_TERM_CHANCE = 0.005
+CREATE_TERM_CHANCE = 0.0005
 
 # chance to delete a term (multiplied by number of terms)
 DELETE_TERM_CHANCE = 0.0005
@@ -34,7 +34,7 @@ BRANCH_SEGMENTS = 2
 BRANCH_DISTANCE = 3
 
 # Hard limit at this depth
-RECURSION_LIMIT = 20
+RECURSION_LIMIT = 25
 
 ##################
 # Plotting       #
@@ -51,4 +51,4 @@ ORIGIN_Y = PLOT_SIZE / 2.0
 ##################
 
 # spacing of grid used to check how well-covered the area is.
-SERVICE_GRID_SPACING = 32
+SERVICE_GRID_SPACING = 64
