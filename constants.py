@@ -51,4 +51,4 @@ ORIGIN_Y = PLOT_SIZE / 2.0
 ##################
 
 # spacing of grid used to check how well-covered the area is.
-SERVICE_GRID_SPACING = 64
+SERVICE_GRID_SPACING = 32

@@ -169,8 +169,9 @@ class Solution(object):
 			for y in range(constants.PLOT_MARGIN, constants.PLOT_SIZE - constants.PLOT_MARGIN, constants.SERVICE_GRID_SPACING)
 		]
 		self.service_penalty = sum(map(service_level, eval_set))
-		self.length_penalty = max(0.0, (self.total_length / len(point_set)) - 10.0)
-		self.fitness = 1.0 / (self.service_penalty + self.length_penalty)
+		self.length_penalty = max(0.0, (self.total_length / len(point_set)))
+		self.complexity_penalty = int(max(0, len(point_set) ** (1.0 / constants.BRANCH_SEGMENTS)))
+		self.fitness = 1.0 / (self.service_penalty + self.length_penalty + self.complexity_penalty)
 		return self
 
 
@@ -375,7 +376,7 @@ for lap in range(1000000):
 		print "       radiance:    {radiance_function}".format(radiance_function=fittest.radiance_function.__unicode__())
 		print "       orientation: {orientation_function}".format(orientation_function=fittest.orientation_function.__unicode__())
 		print "       termination: {termination_function}".format(termination_function=fittest.termination_function.__unicode__())
-		print "       penalties:   service [{service_penalty:.2}] length [{length_penalty:.2}]".format(service_penalty=fittest.service_penalty, length_penalty=fittest.length_penalty)
+		print "       penalties:   service [{service_penalty:.2}] length [{length_penalty:.2}] complexity [{complexity_penalty}]".format(service_penalty=fittest.service_penalty, length_penalty=fittest.length_penalty, complexity_penalty=fittest.complexity_penalty)
 		print ""
 	elif lap % 1000 == 0:
 		print "{lap}".format(lap=lap)
