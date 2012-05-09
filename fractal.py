@@ -1,8 +1,9 @@
-from math import sin, cos, e, pi, hypot, copysign, log
+from math import sin, cos, e, pi, hypot, copysign
 import sys
 import constants
 import copy
-from random import choice, random, seed, uniform, triangular
+import json
+from random import choice, random, seed, uniform
 from PIL import Image, ImageDraw
 from multiprocessing import Pool
 seed()
@@ -146,6 +147,21 @@ class Solution(object):
 		recurse(origin)
 		return points
 
+	def normalised_segment_set(self):
+		origin = OriginPoint()
+
+		def recurse(base):
+			r = {'x': base.x, 'y': base.y, 'children': []}
+			if base.depth < constants.RECURSION_LIMIT and not base.terminate(self):
+				for segment in base.segments(self):
+					end_point = segment.end(self)
+					# segments.append([base.x, base.y, end_point.x, end_point.y])
+					r['children'].append(recurse(end_point))
+			return r
+
+		segments = recurse(origin)
+		return segments
+
 	def solve(self):
 		def in_bounds(p):
 			if p.x < constants.PLOT_MARGIN or p.x > (constants.PLOT_SIZE - constants.PLOT_MARGIN):
@@ -180,8 +196,8 @@ class Point(object):
 		return str(self.x) + ', ' + str(self.y)
 
 	def __init__(self, x, y, depth=0, parent_orientation=0):
-		self.x = x
-		self.y = y
+		self.x = int(x)
+		self.y = int(y)
 		self.depth = depth
 		self.dist_to_origin = self._dist_to_origin()
 		self.parent_orientation = parent_orientation
@@ -371,6 +387,9 @@ for lap in range(1000000):
 	if last_fit != this_fit or lap == 0:
 		p = Plot(fittest)
 		p.draw(lap)
+		f = open('out.{lap}.json'.format(lap=lap), 'w')
+		json.dump(fittest.normalised_segment_set(), f)
+		f.close()
 		print "{lap}: {fitness} ({improvement:+.2%}) from {count} solutions".format(lap=lap, fitness=this_fit, improvement=improvement, count=len(solutions))
 		print "       length:      {length_function}".format(length_function=fittest.length_function.__unicode__())
 		print "       radiance:    {radiance_function}".format(radiance_function=fittest.radiance_function.__unicode__())

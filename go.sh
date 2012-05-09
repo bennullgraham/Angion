@@ -1,1 +1,3 @@
-touch out-temp-png && rm out*png && python fractal.py
+touch out-temp-png out-temp-json
+rm out*png out*json
+python fractal.py
