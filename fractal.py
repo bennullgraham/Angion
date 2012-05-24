@@ -279,6 +279,7 @@ class Plot(object):
 		self.solution = solution
 
 	def draw(self, seq):
+		# (0,150,255) [0x0096ff] -> (42,22,69) [0x45162a]
 		def colour_lookup(ratio, shade=False):
 			r = 000 + (ratio * (42 - 000))
 			g = 150 + (ratio * (22 - 150))
