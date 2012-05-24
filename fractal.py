@@ -63,6 +63,7 @@ class BaseTerm(object):
 		# (u'EXP'),
 		# (u'POLY'),
 		(u'TRIG'),
+		(u'LINE'),
 		(u'CNST'),
 	)
 
@@ -73,13 +74,15 @@ class BaseTerm(object):
 
 	def __unicode__(self):
 		if self.term_type == 'EXP':
-			f = '{outer:.2}.e^({inner:.2}x)'
+			f = '{outer:.2}e^({inner:.2}x)'
 		elif self.term_type == 'TRIG':
-			f = '{outer:.2}.sin({inner:.2}x)'
+			f = '{outer:.2}sin({inner:.2}x)'
 		elif self.term_type == 'POLY':
-			f = '{outer:.2}.x^{inner:.2}'
+			f = '{outer:.2}x^{inner:.2}'
+		elif self.term_type == 'LINE':
+			f = '({outer:.2}*{inner:.2})x'
 		elif self.term_type == 'CNST':
-			f = '({outer:.2}+{inner:.2})'
+			f = '({outer:.2}*{inner:.2})'
 		else:
 			return "er..."
 
@@ -92,6 +95,8 @@ class BaseTerm(object):
 			f = lambda i, o, x: o * sin(x * i)
 		elif self.term_type == 'POLY':
 			f = lambda i, o, x: o * e ** (x * i)
+		elif self.term_type == 'LINE':
+			f = lambda i, o, x: o * i * x
 		elif self.term_type == 'CNST':
 			f = lambda i, o, x: o * i
 		else:
@@ -171,11 +176,11 @@ class Solution(object):
 			return True
 
 		def to_service_grid_bucket(p):
-			if in_bounds(p):
-				return (p.x // constants.SERVICE_GRID_SPACING, p.y // constants.SERVICE_GRID_SPACING)
+			return (p.x // constants.SERVICE_GRID_SPACING, p.y // constants.SERVICE_GRID_SPACING)
 
 		def service_level(eval_point):
-			return min([hypot(eval_point[0] - p[0], eval_point[1] - p[1]) for p in quantised_point_set])
+			# return min([hypot(eval_point[0] - p[0], eval_point[1] - p[1]) for p in quantised_point_set]) ** 2
+			return min([(eval_point[0] - p[0]) ** 2 + (eval_point[1] - p[1]) ** 2 for p in quantised_point_set])
 
 		point_set = self.point_set()
 		valid_point_set = filter(in_bounds, point_set)
@@ -184,10 +189,11 @@ class Solution(object):
 			for x in range(constants.PLOT_MARGIN, constants.PLOT_SIZE - constants.PLOT_MARGIN, constants.SERVICE_GRID_SPACING)
 			for y in range(constants.PLOT_MARGIN, constants.PLOT_SIZE - constants.PLOT_MARGIN, constants.SERVICE_GRID_SPACING)
 		]
-		self.service_penalty = sum(map(service_level, eval_set))
-		self.length_penalty = max(0.0, (self.total_length / len(point_set)))
-		self.complexity_penalty = int(max(0, len(point_set) ** (1.0 / constants.BRANCH_SEGMENTS)))
-		self.fitness = 1.0 / (self.service_penalty + self.length_penalty + self.complexity_penalty)
+		self.service_penalty = float(sum(map(service_level, eval_set)) / len(eval_set))
+		self.length_penalty = max(1.0, (self.total_length / len(point_set)))
+		self.complexity_penalty = int(max(0, len(point_set))) ** 2
+		self.bounds_penalty = max(1, (len(point_set) - len(valid_point_set)) * 100) ** 2
+		self.fitness = (self.service_penalty + self.length_penalty + self.complexity_penalty + self.bounds_penalty) ** -1
 		return self
 
 
@@ -285,9 +291,9 @@ class Plot(object):
 			g = 150 + (ratio * (22 - 150))
 			b = 255 + (ratio * (69 - 255))
 			if shade:
-				r /= 4.0
-				g /= 4.0
-				b /= 4.0
+				r /= 3.0
+				g /= 3.0
+				b /= 3.0
 			return "rgb({},{},{})".format(int(r), int(g), int(b))
 
 		im = Image.new('RGBA', (constants.PLOT_SIZE, constants.PLOT_SIZE), (10, 4, 27, 255))
@@ -304,14 +310,14 @@ class Plot(object):
 		# sort by depth so oldest segments are drawn on top
 		points.sort(key=lambda p: -p.depth)
 
-		# for point in points:
-		# 	fill = colour_lookup(float(point.depth) / (points[0].depth + 1), shade=True)
-		# 	service_x = (point.x // constants.SERVICE_GRID_SPACING) * constants.SERVICE_GRID_SPACING
-		# 	service_y = (point.y // constants.SERVICE_GRID_SPACING) * constants.SERVICE_GRID_SPACING
-		# 	draw.rectangle(
-		# 		(service_x + 1, service_y + 1, service_x + constants.SERVICE_GRID_SPACING - 1, service_y + constants.SERVICE_GRID_SPACING - 1),
-		# 		fill=fill  # "rgb(25,20,37,20)"
-		# 	)
+		for point in points:
+			fill = colour_lookup(float(point.depth) / (points[0].depth + 1), shade=True)
+			service_x = (point.x // constants.SERVICE_GRID_SPACING) * constants.SERVICE_GRID_SPACING
+			service_y = (point.y // constants.SERVICE_GRID_SPACING) * constants.SERVICE_GRID_SPACING
+			draw.rectangle(
+				(service_x + 1, service_y + 1, service_x + constants.SERVICE_GRID_SPACING - 1, service_y + constants.SERVICE_GRID_SPACING - 1),
+				fill=fill  # "rgb(25,20,37,20)"
+			)
 
 		for point in points:
 			fill = colour_lookup(float(point.depth) / (points[0].depth + 1))
@@ -345,15 +351,16 @@ def new_solution():
 candidates = []
 solutions = []
 fittest = Solution()
-fittest.length_function = TermSet(init_terms=[BaseTerm('CNST', innerMultiplier=3.0, outerMultiplier=3.0)])
-fittest.radiance_function = TermSet(init_terms=[BaseTerm('CNST', innerMultiplier=0.5, outerMultiplier=0.5)])
+fittest.length_function = TermSet(init_terms=[BaseTerm('CNST', innerMultiplier=3.0, outerMultiplier=3.0), BaseTerm('LINE', innerMultiplier=-0.01, outerMultiplier=0.1)])
+fittest.radiance_function = TermSet(init_terms=[BaseTerm('CNST', innerMultiplier=1.0, outerMultiplier=1.5)])
 fittest.orientation_function = TermSet(init_terms=[BaseTerm('CNST', innerMultiplier=0.0, outerMultiplier=0.0)])
-fittest.termination_function = TermSet(init_terms=[BaseTerm('CNST', innerMultiplier=3.0, outerMultiplier=2.0)])
+fittest.termination_function = TermSet(init_terms=[BaseTerm('CNST', innerMultiplier=3.0, outerMultiplier=3.0)])
 fittest.solve()
 
 solutions.append(fittest)
 last_fit = 0
 this_fit = fittest.fitness
+high_fit = this_fit
 pool = Pool(4)
 
 
@@ -366,26 +373,27 @@ def cross(s1, s2):
 	return sn
 
 for lap in range(1000000):
-	candidates = sorted(solutions, key=lambda s: s.fitness)[:2]
-	candidates.extend([new_solution() for n in range(1)])
+	candidates = sorted(solutions, key=lambda s: s.fitness)[:3]
+	# candidates.extend([new_solution() for n in range(2)])
 	# keep and mutate the best few from previous round
 	solutions = pool.map(mutate, [copy.deepcopy(c) for c in candidates])
 
 	# keep the best few from previous round unmutated
-	solutions.extend([copy.deepcopy(c) for c in candidates])
+	# solutions.extend([copy.deepcopy(c) for c in candidates])
 
 	# mix up the functions from the best few from previous round
 	solutions.extend([cross(s1, s2) for s1 in candidates for s2 in candidates for n in range(1)])
 
 	solutions = pool.map(solve, solutions)  # compute point-sets and fitnesses
-	solutions.append(fittest)  # keep the best from last round, un-mutated
+	# solutions.append(fittest)  # keep the best from last round, un-mutated
 	fittest = max(solutions, key=lambda s: s.fitness)
 
 	last_fit = this_fit
 	this_fit = fittest.fitness
-	improvement = 0 if last_fit == 0 else (this_fit / last_fit) - 1
+	improvement = 0 if last_fit == 0 else (this_fit / high_fit) - 1
 
-	if last_fit != this_fit or lap == 0:
+	if this_fit > high_fit or lap == 0:
+		high_fit = this_fit
 		p = Plot(fittest)
 		p.draw(lap)
 		f = open('out.{lap}.json'.format(lap=lap), 'w')
@@ -396,7 +404,7 @@ for lap in range(1000000):
 		print "       radiance:    {radiance_function}".format(radiance_function=fittest.radiance_function.__unicode__())
 		print "       orientation: {orientation_function}".format(orientation_function=fittest.orientation_function.__unicode__())
 		print "       termination: {termination_function}".format(termination_function=fittest.termination_function.__unicode__())
-		print "       penalties:   service [{service_penalty:.2}] length [{length_penalty:.2}] complexity [{complexity_penalty}]".format(service_penalty=fittest.service_penalty, length_penalty=fittest.length_penalty, complexity_penalty=fittest.complexity_penalty)
+		print "       penalties:   service [{service_penalty:.2}] length [{length_penalty:.2}] complexity [{complexity_penalty}] bounds [{bounds_penalty}]".format(service_penalty=fittest.service_penalty, length_penalty=fittest.length_penalty, complexity_penalty=fittest.complexity_penalty, bounds_penalty=fittest.bounds_penalty)
 		print ""
 	elif lap % 1000 == 0:
 		print "{lap}".format(lap=lap)
