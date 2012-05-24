@@ -1,11 +1,8 @@
 from math import sin, cos, e, pi, hypot, copysign
 import sys
 import constants
-import copy
-import json
 from random import choice, random, seed, uniform
 from PIL import Image, ImageDraw
-from multiprocessing import Pool
 seed()
 
 
@@ -126,7 +123,8 @@ class BaseTerm(object):
 
 class Solution(object):
 
-	def __init__(self):
+	def __init__(self, configuration):
+		self.configuration = configuration
 		self.fitness = 0
 		self.total_length = None
 
@@ -139,16 +137,16 @@ class Solution(object):
 
 	def point_set(self):
 		self.total_length = 1
-		origin = OriginPoint()
+		origin = OriginPoint(self)
 		points = []
 
 		def recurse(base):
 			points.append(base)
-			if base.depth < constants.RECURSION_LIMIT and not base.terminate(self):
-				segments = base.segments(self)
-				self.total_length += segments[0].length(self)
+			if base.depth < self.configuration.RECURSION_LIMIT and not base.terminate():
+				segments = base.segments()
+				self.total_length += segments[0].length()
 				for segment in segments:
-					recurse(segment.end(self))
+					recurse(segment.end())
 		recurse(origin)
 		return points
 
@@ -157,7 +155,7 @@ class Solution(object):
 
 		def recurse(base):
 			r = {'x': base.x, 'y': base.y, 'children': []}
-			if base.depth < constants.RECURSION_LIMIT and not base.terminate(self):
+			if base.depth < self.configuration.RECURSION_LIMIT and not base.terminate(self):
 				for segment in base.segments(self):
 					end_point = segment.end(self)
 					# segments.append([base.x, base.y, end_point.x, end_point.y])
@@ -169,14 +167,14 @@ class Solution(object):
 
 	def solve(self):
 		def in_bounds(p):
-			if p.x < constants.PLOT_MARGIN or p.x > (constants.PLOT_SIZE - constants.PLOT_MARGIN):
+			if p.x < self.configuration.PLOT_MARGIN or p.x > (self.configuration.PLOT_SIZE - self.configuration.PLOT_MARGIN):
 				return False
-			if p.y < constants.PLOT_MARGIN or p.y > (constants.PLOT_SIZE - constants.PLOT_MARGIN):
+			if p.y < self.configuration.PLOT_MARGIN or p.y > (self.configuration.PLOT_SIZE - self.configuration.PLOT_MARGIN):
 				return False
 			return True
 
 		def to_service_grid_bucket(p):
-			return (p.x // constants.SERVICE_GRID_SPACING, p.y // constants.SERVICE_GRID_SPACING)
+			return (p.x // self.configuration.SERVICE_GRID_SPACING, p.y // self.configuration.SERVICE_GRID_SPACING)
 
 		def service_level(eval_point):
 			# return min([hypot(eval_point[0] - p[0], eval_point[1] - p[1]) for p in quantised_point_set]) ** 2
@@ -186,8 +184,8 @@ class Solution(object):
 		valid_point_set = filter(in_bounds, point_set)
 		quantised_point_set = set(map(to_service_grid_bucket, valid_point_set))
 		eval_set = [(x, y)
-			for x in range(constants.PLOT_MARGIN, constants.PLOT_SIZE - constants.PLOT_MARGIN, constants.SERVICE_GRID_SPACING)
-			for y in range(constants.PLOT_MARGIN, constants.PLOT_SIZE - constants.PLOT_MARGIN, constants.SERVICE_GRID_SPACING)
+			for x in range(self.configuration.PLOT_MARGIN, self.configuration.PLOT_SIZE - self.configuration.PLOT_MARGIN, self.configuration.SERVICE_GRID_SPACING)
+			for y in range(self.configuration.PLOT_MARGIN, self.configuration.PLOT_SIZE - self.configuration.PLOT_MARGIN, self.configuration.SERVICE_GRID_SPACING)
 		]
 		self.service_penalty = float(sum(map(service_level, eval_set)) / len(eval_set))
 		self.length_penalty = max(1.0, (self.total_length / len(point_set)))
@@ -201,32 +199,34 @@ class Point(object):
 	def __unicode__(self):
 		return str(self.x) + ', ' + str(self.y)
 
-	def __init__(self, x, y, depth=0, parent_orientation=0):
+	def __init__(self, x, y, solution, depth, parent_orientation):
 		self.x = int(x)
 		self.y = int(y)
+		self.solution = solution
+		self.configuration = solution.configuration
 		self.depth = depth
 		self.dist_to_origin = self._dist_to_origin()
 		self.parent_orientation = parent_orientation
-		self.segment_count = 1 if self.depth % constants.BRANCH_DISTANCE else constants.BRANCH_SEGMENTS
+		self.segment_count = 1 if self.depth % self.configuration.BRANCH_DISTANCE else self.configuration.BRANCH_SEGMENTS
 
 	def _dist_to_origin(self):
 		try:
-			return min(constants.PLOT_SIZE, hypot(self.x - constants.ORIGIN_X, self.y - constants.ORIGIN_Y), key=abs)
+			return min(self.configuration.PLOT_SIZE, hypot(self.x - self.configuration.ORIGIN_X, self.y - self.configuration.ORIGIN_Y), key=abs)
 		except OverflowError:
 			return sys.float_info.max
 
-	def radiance(self, solution):
+	def radiance(self):
 		dist = self.dist_to_origin
-		return solution.radiance_function.f(dist) % (2 * pi)
+		return self.solution.radiance_function.f(dist) % (2 * pi)
 
-	def orientation(self, solution):
+	def orientation(self):
 		dist = self.dist_to_origin
-		delta = solution.orientation_function.f(dist)
+		delta = self.solution.orientation_function.f(dist)
 		return (self.parent_orientation + delta) % (2 * pi)
 
-	def segments(self, solution):
-		orientation = self.orientation(solution)
-		radiance = self.radiance(solution)
+	def segments(self):
+		orientation = self.orientation()
+		radiance = self.radiance()
 		sweep_begin = orientation - (radiance / 2)
 		sweep_step = radiance / (self.segment_count)
 		segments = []
@@ -238,44 +238,47 @@ class Point(object):
 				segments.append(Segment(self, sweep_begin + (sweep_step * n)))
 		return segments
 
-	def terminate(self, solution):
+	def terminate(self):
 		try:
 			dist = self.dist_to_origin
-			return solution.termination_function.f(dist) < self.depth
+			return self.solution.termination_function.f(dist) < self.depth
 		except OverflowError:
 			return True
 
 
 class OriginPoint(Point):
 
-	def __init__(self):
-		self.x = constants.ORIGIN_X
-		self.y = constants.ORIGIN_Y
+	def __init__(self, solution):
+		self.solution = solution
+		self.configuration = solution.configuration
+		self.x = self.configuration.ORIGIN_X
+		self.y = self.configuration.ORIGIN_Y
 		self.depth = 0
 		self.dist_to_origin = 0
 		self.parent_orientation = 0
 		self.segment_count = 4
 
-	def radiance(self, solution):
+	def radiance(self):
 		return 2 * pi
 
-	def orientation(self, solution):
+	def orientation(self):
 		return 0
 
 
 class Segment(object):
 	def __init__(self, base, angle):
+		self.solution = base.solution
 		self.base = base
 		self.angle = angle
 
-	def length(self, solution):
+	def length(self):
 		dist = self.base.dist_to_origin
-		return abs(solution.length_function.f(dist))
+		return abs(self.solution.length_function.f(dist))
 
-	def end(self, solution):
-		x = self.base.x + self.length(solution) * cos(self.angle)
-		y = self.base.y + self.length(solution) * sin(self.angle)
-		return Point(x, y, self.base.depth + 1, self.angle)
+	def end(self):
+		x = self.base.x + self.length() * cos(self.angle)
+		y = self.base.y + self.length() * sin(self.angle)
+		return Point(x, y, self.solution, self.base.depth + 1, self.angle)
 
 
 class Plot(object):
@@ -326,156 +329,3 @@ class Plot(object):
 				if end.x >= 0 and end.y >= 0 and end.x <= constants.PLOT_SIZE and end.y <= constants.PLOT_SIZE:
 					draw.line((point.x, point.y, end.x, end.y), fill=fill)
 		im.save("out." + str(seq) + ".png", "PNG")
-
-
-class Configuration(object):
-	##################
-	# Function terms #
-	##################
-
-	# amount to vary terms by if mutating. 0.1 = +/- 10%.
-	MUTE_VARIABILITY = 0.01
-
-	# how many terms of a termset to mutate. terms are not limited to a single mutation.
-	NUM_MUTE_TERMS = 3
-
-	# 0 -> 1 chance a term will be mutated at all
-	MUTE_CHANCE = 0.5
-
-	# maximum terms in a termset
-	MAX_TERMS = 3
-
-	# chance to add new terms to a term set
-	CREATE_TERM_CHANCE = 0.0007
-
-	# chance to delete a term (multiplied by number of terms)
-	DELETE_TERM_CHANCE = 0.0005
-
-	##################
-	# Branching      #
-	##################
-	# how many segments has each point?
-	BRANCH_SEGMENTS = 2
-
-	# split into BRANCHING_FACTOR segments every BRANCH_DISTANCEth point
-	BRANCH_DISTANCE = 5
-
-	# Hard limit at this depth
-	RECURSION_LIMIT = 50
-
-	##################
-	# Plotting       #
-	##################
-	PLOT_SIZE = 1024
-	PLOT_MARGIN = 64
-	ORIGIN_X = PLOT_SIZE / 2.0
-	ORIGIN_Y = PLOT_SIZE / 2.0
-
-	##################
-	# Fitness test   #
-	##################
-
-	# spacing of grid used to check how well-covered the area is.
-	SERVICE_GRID_SPACING = 16
-
-
-class SolutionSet(object):
-	def __init__(self):
-		initial_solution = Solution()
-		initial_solution.length_function = TermSet(init_terms=[BaseTerm('CNST', innerMultiplier=3.0, outerMultiplier=3.0), BaseTerm('LINE', innerMultiplier=-0.01, outerMultiplier=0.1)])
-		initial_solution.radiance_function = TermSet(init_terms=[BaseTerm('CNST', innerMultiplier=1.0, outerMultiplier=1.5)])
-		initial_solution.orientation_function = TermSet(init_terms=[BaseTerm('CNST', innerMultiplier=0.0, outerMultiplier=0.0)])
-		initial_solution.termination_function = TermSet(init_terms=[BaseTerm('CNST', innerMultiplier=3.0, outerMultiplier=3.0)])
-
-		self.fittest = None
-		self.configuration = Configuration
-		self.generation = 0
-		self.solutions = [initial_solution]
-
-	def new_solution():
-		def new_baseterm():
-			return BaseTerm(choice(BaseTerm.TERM_TYPES), innerMultiplier=uniform(-2.0, 2.0), outerMultiplier=uniform(-3.0, 3.0))
-		s = Solution()
-		s.length_function = TermSet(init_terms=[new_baseterm()])
-		s.radiance_function = TermSet(init_terms=[new_baseterm()])
-		s.orientation_function = TermSet(init_terms=[new_baseterm()])
-		s.termination_function = TermSet(init_terms=[new_baseterm()])
-		return s
-
-	def evolve(self):
-		self.age = self.age + 1
-		# keep the best few
-		candidates = sorted(self.solutions, key=lambda s: s.fitness)[:3]
-		# candidates.extend([new_solution() for n in range(2)])
-		# keep and mutate the best few from previous round
-		solutions = pool.map(mutate, [copy.deepcopy(c) for c in candidates])
-		# keep the best few from previous round unmutated
-		# solutions.extend([copy.deepcopy(c) for c in candidates])
-		# mix up the functions from the best few from previous round
-		solutions.extend([cross(s1, s2) for s1 in candidates for s2 in candidates for n in range(1)])
-
-	def solve(self):
-		self.solutions = pool.map(solve, self.solutions)  # compute point-sets and fitnesses
-		self.fittest = max(self.solutions, key=lambda s: s.fitness)
-
-	def next_generation(self):
-		self.evolve()
-		self.solve()
-
-
-def solve(solution):
-	return solution.solve()
-
-
-def mutate(solution):
-	return solution.mutate()
-
-
-
-
-candidates = []
-
-fittest.solve()
-
-solutions.append(fittest)
-last_fit = 0
-this_fit = fittest.fitness
-high_fit = this_fit
-pool = Pool(4)
-
-
-def cross(s1, s2):
-	sn = Solution()
-	sn.length_function = copy.deepcopy(s1.length_function) if random() > 0.5 else copy.deepcopy(s2.length_function)
-	sn.radiance_function = copy.deepcopy(s1.radiance_function) if random() > 0.5 else copy.deepcopy(s2.radiance_function)
-	sn.orientation_function = copy.deepcopy(s1.orientation_function) if random() > 0.5 else copy.deepcopy(s2.orientation_function)
-	sn.termination_function = copy.deepcopy(s1.termination_function) if random() > 0.5 else copy.deepcopy(s2.termination_function)
-	return sn
-
-for lap in range(1000000):
-	
-	# solutions.append(fittest)  # keep the best from last round, un-mutated
-	
-
-	last_fit = this_fit
-	this_fit = fittest.fitness
-	improvement = 0 if last_fit == 0 else (this_fit / high_fit) - 1
-
-	if this_fit > high_fit or lap == 0:
-		high_fit = this_fit
-		p = Plot(fittest)
-		p.draw(lap)
-		f = open('out.{lap}.json'.format(lap=lap), 'w')
-		json.dump(fittest.normalised_segment_set(), f)
-		f.close()
-		print "{lap}: {fitness} ({improvement:+.2%}) from {count} solutions".format(lap=lap, fitness=this_fit, improvement=improvement, count=len(solutions))
-		print "       length:      {length_function}".format(length_function=fittest.length_function.__unicode__())
-		print "       radiance:    {radiance_function}".format(radiance_function=fittest.radiance_function.__unicode__())
-		print "       orientation: {orientation_function}".format(orientation_function=fittest.orientation_function.__unicode__())
-		print "       termination: {termination_function}".format(termination_function=fittest.termination_function.__unicode__())
-		print "       penalties:   service [{service_penalty:.2}] length [{length_penalty:.2}] complexity [{complexity_penalty}] bounds [{bounds_penalty}]".format(service_penalty=fittest.service_penalty, length_penalty=fittest.length_penalty, complexity_penalty=fittest.complexity_penalty, bounds_penalty=fittest.bounds_penalty)
-		print ""
-	elif lap % 1000 == 0:
-		print "{lap}".format(lap=lap)
-
-
