@@ -1,67 +1,16 @@
-from solution.solution import Solution, BaseTerm, TermSet, Plot
+from solution import Solution, BaseTerm, TermSet, Plot
 from multiprocessing import Pool
 from random import choice, uniform, random
 import copy
 import json
 
 
-class Configuration(object):
-    ##################
-    # Function terms #
-    ##################
-
-    # amount to vary terms by if mutating. 0.1 = +/- 10%.
-    MUTE_VARIABILITY = 0.01
-
-    # how many terms of a termset to mutate. terms are not limited to a single mutation.
-    NUM_MUTE_TERMS = 3
-
-    # 0 -> 1 chance a term will be mutated at all
-    MUTE_CHANCE = 0.5
-
-    # maximum terms in a termset
-    MAX_TERMS = 3
-
-    # chance to add new terms to a term set
-    CREATE_TERM_CHANCE = 0.0007
-
-    # chance to delete a term (multiplied by number of terms)
-    DELETE_TERM_CHANCE = 0.0005
-
-    ##################
-    # Branching      #
-    ##################
-    # how many segments has each point?
-    BRANCH_SEGMENTS = 2
-
-    # split into BRANCHING_FACTOR segments every BRANCH_DISTANCEth point
-    BRANCH_DISTANCE = 5
-
-    # Hard limit at this depth
-    RECURSION_LIMIT = 50
-
-    ##################
-    # Plotting       #
-    ##################
-    PLOT_SIZE = 1024
-    PLOT_MARGIN = 64
-    ORIGIN_X = 512  # PLOT_SIZE / 2.0
-    ORIGIN_Y = 512  # PLOT_SIZE / 2.0
-
-    ##################
-    # Fitness test   #
-    ##################
-
-    # spacing of grid used to check how well-covered the area is.
-    SERVICE_GRID_SPACING = 16
-
-
-class SolutionSet(object):
+class Generation(object):
     def __init__(self):
         self.fittest = None
-        self.configuration = Configuration
+
         self.generation = 0
-        initial_solution = Solution(self.configuration)
+        initial_solution = Solution()
         initial_solution.length_function = TermSet(init_terms=[BaseTerm('CNST', innerMultiplier=3.0, outerMultiplier=3.0), BaseTerm('LINE', innerMultiplier=-0.01, outerMultiplier=0.1)])
         initial_solution.radiance_function = TermSet(init_terms=[BaseTerm('CNST', innerMultiplier=1.0, outerMultiplier=1.5)])
         initial_solution.orientation_function = TermSet(init_terms=[BaseTerm('CNST', innerMultiplier=0.0, outerMultiplier=0.0)])
@@ -73,7 +22,7 @@ class SolutionSet(object):
     def new_solution(self):
         def new_baseterm():
             return BaseTerm(choice(BaseTerm.TERM_TYPES), innerMultiplier=uniform(-2.0, 2.0), outerMultiplier=uniform(-3.0, 3.0))
-        s = Solution(self.configuration)
+        s = Solution()
         s.length_function = TermSet(init_terms=[new_baseterm()])
         s.radiance_function = TermSet(init_terms=[new_baseterm()])
         s.orientation_function = TermSet(init_terms=[new_baseterm()])
@@ -138,6 +87,6 @@ def mutate(solution):
     return solution.mutate()
 
 if __name__ == "__main__":
-    s = SolutionSet()
+    g = Generation()
     while True:
-        s.next_generation()
+        g.next_generation()

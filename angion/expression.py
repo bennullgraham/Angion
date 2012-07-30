@@ -1,7 +1,7 @@
 import sys
 import constants
 from random import choice, random, uniform
-from math import sin, copysign, e
+from math import sin, copysign  # , e
 
 
 class Expression(object):
@@ -25,9 +25,8 @@ class Expression(object):
 
     def _add_term(self):
         if len(self.terms) < constants.MAX_TERMS:
-            term_type = choice(BaseTerm.TERM_TYPES)
-            bt = BaseTerm(term_type=term_type)
-            self.terms.append(bt)
+            t = choice(TermFactory.create('Random'))
+            self.terms.append(t)
 
     def _delete_term(self):
         t = choice(self.terms)
@@ -53,58 +52,38 @@ class Expression(object):
                 mutate_count += 1
 
 
-class BaseTerm(object):
-    TERM_TYPES = (
-        # (u'EXP'),
-        # (u'POLY'),
-        (u'TRIG'),
-        (u'LINE'),
-        (u'CNST'),
-    )
+class TermFactory(object):
+    terms = {
+        'Trig': TrigTerm,
+        'Line': LineTerm,
+        'Exp': ExpTerm,
+    }
 
+    def create(self, type):
+        if type == 'Random':
+            return choice(self.terms)()
+        else:
+            return self.terms[type]()
+
+
+class TermPrototype(object):
     def __init__(self, term_type, innerMultiplier=1.0, outerMultiplier=1.0):
         self.term_type = term_type
         self.innerMultiplier = innerMultiplier
         self.outerMultiplier = outerMultiplier
 
     def __unicode__(self):
-        if self.term_type == 'EXP':
-            f = '{outer:.2}e^({inner:.2}x)'
-        elif self.term_type == 'TRIG':
-            f = '{outer:.2}sin({inner:.2}x)'
-        elif self.term_type == 'POLY':
-            f = '{outer:.2}x^{inner:.2}'
-        elif self.term_type == 'LINE':
-            f = '({outer:.2}*{inner:.2})x'
-        elif self.term_type == 'CNST':
-            f = '({outer:.2}*{inner:.2})'
-        else:
-            return "er..."
-
-        return f.format(outer=float(self.outerMultiplier), inner=float(self.innerMultiplier))
+        return self.formatString().format(outer=float(self.outerMultiplier), inner=float(self.innerMultiplier))
 
     def f(self, x):
-        if self.term_type == 'EXP':
-            f = lambda i, o, x: o * (x ** i)
-        elif self.term_type == 'TRIG':
-            f = lambda i, o, x: o * sin(x * i)
-        elif self.term_type == 'POLY':
-            f = lambda i, o, x: o * e ** (x * i)
-        elif self.term_type == 'LINE':
-            f = lambda i, o, x: o * i * x
-        elif self.term_type == 'CNST':
-            f = lambda i, o, x: o * i
-        else:
-            raise Exception("Term type unknown")
-
         try:
-            fx = f(self.innerMultiplier, self.outerMultiplier, x)
+            fx = self._f(self.innerMultiplier, self.outerMultiplier, x)
         except OverflowError:
             # return largest float with correct sign
             i_sign = copysign(1, self.innerMultiplier)
             o_sign = copysign(1, self.outerMultiplier)
             x_sign = copysign(1, x)
-            fx = copysign(sys.float_info.max, f(i_sign, o_sign, x_sign))
+            fx = copysign(sys.float_info.max, self._f(i_sign, o_sign, x_sign))
         except ZeroDivisionError:
             fx = 0
         except ValueError:
@@ -116,3 +95,27 @@ class BaseTerm(object):
         self.innerMultiplier += uniform(-constants.MUTE_VARIABILITY, -constants.MUTE_VARIABILITY)
         self.outerMultiplier += uniform(-constants.MUTE_VARIABILITY, -constants.MUTE_VARIABILITY)
         return self
+
+
+class ExpTerm(TermPrototype):
+    def formatString(self):
+        return '{outer:.2}e^({inner:.2}x)'
+
+    def _f(self, x):
+        return lambda i, o, x: o * (x ** i)
+
+
+class LineTerm(TermPrototype):
+    def formatString(self):
+        return '({outer:.2}*{inner:.2})x'
+        
+    def _f(self, x):
+        return lambda i, o, x: o * i
+
+
+class TrigTerm(TermPrototype):
+    def formatString(self):
+        return '{outer:.2}sin({inner:.2}x)'
+        
+    def _f(self, x):
+        return lambda i, o, x: o * sin(i * x)
