@@ -4,18 +4,15 @@ Angion
 
 Running
 -------------------
-Try `python fractal.py`
-
-Stopping
--------------------
-The multithreaded processing employed makes execution invulnerable to ^C, for reasons I haven't looked into. Try:
-
-    ps ax | grep fractal.py | grep -v grep | awk '{print $1}' | while read PROC; do kill $PROC; done
+`python Angion.py`
 
 Output
 --------------------
 In general, output only occurs when a generation improves on the current best.
 
- - A series of out.*n*.png files will be created in the working directory.
+ - A series of out.*n*.png files will be created in the output directory. These are raster renderings of the fractals.
+ - A series of out.*n*.json files will be created in the output directory. These are hierarchical JSON trees representing each point in the fractal.
  - A description of the functions defining the current best solution is printed to stdout
  - Every 1000 generations, the generation number is also printed, regardless of improvement
+
+Output from previous runs currently isn't cleaned up, so you may want to invoke the program like: `rm output/out*{png,json} && python Angion.py`
