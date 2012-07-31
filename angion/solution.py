@@ -18,14 +18,16 @@ class Solution(object):
         self.termination_function.mutate()
         return self
 
-    def point_set(self):
+    def point_set(self, every=1):
         self.total_length = 1
         origin = OriginPoint(self)
         points = []
+        depth_limit = cfg.getint('Fractal', 'recursion_limit')
 
         def recurse(base):
-            points.append(base)
-            if base.depth < cfg.get('Fractal', 'recursion_limit') and not base.terminate():
+            if base.depth % every == 0:
+                points.append(base)
+            if base.depth < depth_limit and not base.terminate():
                 segments = base.segments()
                 self.total_length += segments[0].length()
                 for segment in segments:
@@ -35,10 +37,11 @@ class Solution(object):
 
     def normalised_segment_set(self):
         origin = OriginPoint(self)
+        depth_limit = cfg.getint('Fractal', 'recursion_limit')
 
         def recurse(base):
             r = {'x': base.x, 'y': base.y, 'children': []}
-            if base.depth < cfg.getint('Fractal', 'recursion_limit') and not base.terminate():
+            if base.depth < depth_limit and not base.terminate():
                 for segment in base.segments():
                     end_point = segment.end()
                     r['children'].append(recurse(end_point))
@@ -48,35 +51,33 @@ class Solution(object):
         return segments
 
     def solve(self):
+        margin = cfg.getint('Plot', 'margin')
+        size = cfg.getint('Plot', 'size')
+        spacing = cfg.getint('FitnessTest', 'service_grid_spacing')
+
         def in_bounds(p):
-            if p.x < cfg.getint('Plot', 'margin') or p.x > (cfg.getint('Plot', 'size') - cfg.getint('Plot', 'margin')):
+            if p.x < margin or p.x > (size - margin):
                 return False
-            if p.y < cfg.getint('Plot', 'margin') or p.y > (cfg.getint('Plot', 'size') - cfg.getint('Plot', 'margin')):
+            if p.y < margin or p.y > (size - margin):
                 return False
             return True
 
-        def to_service_grid_bucket(p):
-            return (p.x // cfg.getint('FitnessTest', 'service_grid_spacing'), p.y // cfg.getint('FitnessTest', 'service_grid_spacing'))
-
         def service_level(eval_point):
-            return min([(eval_point[0] - p[0]) ** 2 + (eval_point[1] - p[1]) ** 2 for p in quantised_point_set])
+            return min([(eval_point[0] - p.x) ** 2 + (eval_point[1] - p.y) ** 2 for p in valid_point_set])
 
-        try:
-            point_set = self.point_set()
-            valid_point_set = filter(in_bounds, point_set)
-            quantised_point_set = set(map(to_service_grid_bucket, valid_point_set))
+        point_set = self.point_set(5)
+        valid_point_set = filter(in_bounds, point_set)
 
-            eval_set = [(x, y)
-                for x in range(cfg.getint('Plot', 'margin'), cfg.getint('Plot', 'size') - cfg.getint('Plot', 'margin'), cfg.getint('FitnessTest', 'service_grid_spacing'))
-                for y in range(cfg.getint('Plot', 'margin'), cfg.getint('Plot', 'size') - cfg.getint('Plot', 'margin'), cfg.getint('FitnessTest', 'service_grid_spacing'))
-            ]
-            self.service_penalty = float(sum(map(service_level, eval_set)) / len(eval_set))
-            self.length_penalty = max(1.0, (self.total_length / len(point_set)))
-            self.complexity_penalty = int(max(0, len(point_set))) ** 2
-            self.bounds_penalty = max(1, (len(point_set) - len(valid_point_set)) * 100) ** 2
-            self.fitness = (self.service_penalty + self.length_penalty + self.complexity_penalty + self.bounds_penalty) ** -1
-        except KeyboardInterrupt:
-            pass
+        eval_set = [(x, y)
+            for x in range(margin, size - margin, spacing)
+            for y in range(margin, size - margin, spacing)
+        ]
+        self.service_penalty = float(sum(map(service_level, eval_set)) / len(eval_set))
+        self.length_penalty = 1.0  # max(1.0, (self.total_length / len(point_set)))
+        self.complexity_penalty = 1.0  # int(max(0, len(point_set))) ** 2
+        self.bounds_penalty = max(1, (len(point_set) - len(valid_point_set)) * 100) ** 2
+        self.fitness = 1.0 / (self.service_penalty + self.length_penalty + self.complexity_penalty + self.bounds_penalty)
+
         return self
 
 

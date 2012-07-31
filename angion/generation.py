@@ -15,11 +15,14 @@ class Generation(object):
         initial_solution = Solution()
         initial_solution.length_function = Expression(init_terms=[createTerm('Constant', innerMultiplier=3.0, outerMultiplier=3.0)])
         initial_solution.radiance_function = Expression(init_terms=[createTerm('Constant', innerMultiplier=1.0, outerMultiplier=1.5)])
-        initial_solution.orientation_function = Expression(init_terms=[createTerm('Constant', innerMultiplier=0.0, outerMultiplier=0.0)])
+        initial_solution.orientation_function = Expression(init_terms=[createTerm('Constant', innerMultiplier=-0.1, outerMultiplier=0.1)])
         initial_solution.termination_function = Expression(init_terms=[createTerm('Constant', innerMultiplier=3.0, outerMultiplier=3.0)])
+
         self.solutions = [initial_solution]
-        if cfg.getint('FitnessTest', 'workers') > 1:
-            self.map = Pool(cfg.getint('FitnessTest', 'workers')).map
+        workers = cfg.getint('FitnessTest', 'workers')
+        if workers > 1:
+            print "Evaluating using {workers} worker threads".format(workers=workers)
+            self.map = Pool(processes=workers).map_async
         else:
             self.map = map
         self.max_fitness_acheived = 0
@@ -39,10 +42,7 @@ class Generation(object):
         # keep the best few
         candidates = sorted(self.solutions, key=lambda s: s.fitness)[:3]
         # keep and mutate the best few from previous round
-        try:
-            self.solutions = self.map(mutate, [copy.deepcopy(c) for c in candidates])
-        except KeyboardInterrupt:
-            pass
+        self.solutions = self.map(mutate, [copy.deepcopy(c) for c in candidates])  # .get(100)
         # keep the best few from previous round unmutated
         # solutions.extend([copy.deepcopy(c) for c in candidates])
         # mix up the functions from the best few from previous round
@@ -57,11 +57,8 @@ class Generation(object):
         return sn
 
     def solve(self):
-        try:
-            self.solutions = self.map(solve, self.solutions)  # compute point-sets and fitnesses
-            self.fittest = max(self.solutions, key=lambda s: s.fitness)
-        except KeyboardInterrupt:
-            pass
+        self.solutions = self.map(solve, self.solutions)  # .get(100)  # compute point-sets and fitnesses
+        self.fittest = max(self.solutions, key=lambda s: s.fitness)
 
     def describe(self):
         improvement = 0 if self.max_fitness_acheived == 0 else (self.fittest.fitness / self.max_fitness_acheived) - 1

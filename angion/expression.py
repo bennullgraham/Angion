@@ -1,7 +1,7 @@
 import sys
-import constants
 from random import choice, random, uniform
 from math import sin, copysign
+from config import cfg
 
 
 class Expression(object):
@@ -24,7 +24,7 @@ class Expression(object):
             return f
 
     def _add_term(self):
-        if len(self.terms) < constants.MAX_TERMS:
+        if len(self.terms) < cfg.getint('Function', 'maximum_terms'):
             t = createTerm('Random')
             self.terms.append(t)
 
@@ -36,17 +36,17 @@ class Expression(object):
         mutate_count = 0
 
         # maybe delete a term
-        if self.terms and random() > (1 - (constants.DELETE_TERM_CHANCE * len(self.terms))):
+        if self.terms and random() > (1 - (cfg.getfloat('Function', 'term_deletion_chance') * len(self.terms))):
             self._delete_term()
 
         # potentially create a new term. always do so if there are none.
-        if not self.terms or random() > (1 - constants.CREATE_TERM_CHANCE):
+        if not self.terms or random() > (1 - cfg.getfloat('Function', 'term_creation_chance')):
             self._add_term()
 
         # modify some term constants
         if self.terms:
-            while mutate_count < constants.NUM_MUTE_TERMS:
-                if random() > constants.MUTE_CHANCE:
+            while mutate_count < cfg.getint('Mutation', 'number_of_terms'):
+                if random() > cfg.getfloat('Mutation', 'probability'):
                     t = choice(self.terms)
                     t.mutate()
                 mutate_count += 1
@@ -77,8 +77,9 @@ class TermPrototype(object):
         return fx
 
     def mutate(self):
-        self.innerMultiplier += uniform(-constants.MUTE_VARIABILITY, -constants.MUTE_VARIABILITY)
-        self.outerMultiplier += uniform(-constants.MUTE_VARIABILITY, -constants.MUTE_VARIABILITY)
+        variability = cfg.getfloat('Mutation', 'variability')
+        self.innerMultiplier += uniform(-variability, variability)
+        self.outerMultiplier += uniform(-variability, variability)
         return self
 
 
@@ -108,10 +109,10 @@ class TrigonometricTerm(TermPrototype):
 
 class ConstantTerm(TermPrototype):
     def formatString(self):
-        return '{outer:.2}*{inner:.2}'
+        return '{outer:.2}+{inner:.2}'
 
     def _f(self):
-        return lambda i, o, x: o * i
+        return lambda i, o, x: o + i
 
 
 def createTerm(type, innerMultiplier=1.0, outerMultiplier=1.0):

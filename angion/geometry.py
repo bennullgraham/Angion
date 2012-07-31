@@ -2,6 +2,12 @@ from math import hypot, sin, cos, pi, log
 from sys import float_info
 from config import cfg
 
+# calls to config seem to be slow, so 'cache' these here
+branch_every = cfg.getint('Branch', 'every')
+branch_segments = cfg.getint('Branch', 'segments')
+origin_x = cfg.getint('Fractal', 'origin_x')
+origin_y = cfg.getint('Fractal', 'origin_y')
+
 
 class Point(object):
     def __unicode__(self):
@@ -14,11 +20,11 @@ class Point(object):
         self.depth = depth
         self.dist_to_origin = self._dist_to_origin()
         self.parent_orientation = parent_orientation
-        self.segment_count = 1 if self.depth % cfg.getint('Branch', 'every') else cfg.getint('Branch', 'segments')
+        self.segment_count = 1 if self.depth % branch_every else branch_segments
 
     def _dist_to_origin(self):
         try:
-            return min(cfg.getint('Plot', 'size'), hypot(self.x - cfg.getint('Fractal', 'origin_x'), self.y - cfg.getint('Fractal', 'origin_y')), key=abs)
+            return min(cfg.getint('Plot', 'size'), hypot(self.x - origin_x, self.y - origin_y), key=abs)
         except OverflowError:
             return float_info.max
 
@@ -35,7 +41,10 @@ class Point(object):
         orientation = self.orientation()
         radiance = self.radiance()
         sweep_begin = orientation - (radiance / 2)
-        sweep_step = radiance / (self.segment_count)
+        if self.segment_count == 1:
+            sweep_step = 0
+        else:
+            sweep_step = radiance / (self.segment_count - 1)
         segments = []
 
         if sweep_step == 0:
