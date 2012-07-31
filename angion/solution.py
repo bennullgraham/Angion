@@ -65,7 +65,7 @@ class Solution(object):
         def service_level(eval_point):
             return min([(eval_point[0] - p.x) ** 2 + (eval_point[1] - p.y) ** 2 for p in valid_point_set])
 
-        point_set = self.point_set(5)
+        point_set = self.point_set(1)
         valid_point_set = filter(in_bounds, point_set)
 
         eval_set = [(x, y)
