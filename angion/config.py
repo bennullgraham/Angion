@@ -1,16 +1,10 @@
 import ConfigParser
 
-
-class Config(ConfigParser):
-
-    def __init__(self, arg):
-        super(ConfigParser, self).__init(arg)
-        self.read('angion.cfg')
-        self.add_section([
-            'Mutation'
-            'Function',
-            'Branch',
-            'Plot',
-            'Fractal',
-            'FitnessTest',
-        ])
+cfg = ConfigParser.ConfigParser()
+cfg.add_section('FitnessTest')
+cfg.add_section('Fractal')
+cfg.add_section('Plot')
+cfg.add_section('Branch')
+cfg.add_section('Function')
+cfg.add_section('Mutation')
+cfg.read('angion/angion.cfg')

@@ -1,6 +1,8 @@
-from solution import Solution, BaseTerm, TermSet, Plot
+from config import cfg
+from solution import Solution, Plot
+from expression import Expression, createTerm
 from multiprocessing import Pool
-from random import choice, uniform, random
+from random import uniform, random
 import copy
 import json
 
@@ -11,38 +13,43 @@ class Generation(object):
 
         self.generation = 0
         initial_solution = Solution()
-        initial_solution.length_function = TermSet(init_terms=[BaseTerm('CNST', innerMultiplier=3.0, outerMultiplier=3.0), BaseTerm('LINE', innerMultiplier=-0.01, outerMultiplier=0.1)])
-        initial_solution.radiance_function = TermSet(init_terms=[BaseTerm('CNST', innerMultiplier=1.0, outerMultiplier=1.5)])
-        initial_solution.orientation_function = TermSet(init_terms=[BaseTerm('CNST', innerMultiplier=0.0, outerMultiplier=0.0)])
-        initial_solution.termination_function = TermSet(init_terms=[BaseTerm('CNST', innerMultiplier=3.0, outerMultiplier=3.0)])
+        initial_solution.length_function = Expression(init_terms=[createTerm('Constant', innerMultiplier=3.0, outerMultiplier=3.0)])
+        initial_solution.radiance_function = Expression(init_terms=[createTerm('Constant', innerMultiplier=1.0, outerMultiplier=1.5)])
+        initial_solution.orientation_function = Expression(init_terms=[createTerm('Constant', innerMultiplier=0.0, outerMultiplier=0.0)])
+        initial_solution.termination_function = Expression(init_terms=[createTerm('Constant', innerMultiplier=3.0, outerMultiplier=3.0)])
         self.solutions = [initial_solution]
-        self.pool = Pool(4)
+        if cfg.getint('FitnessTest', 'workers') > 1:
+            self.map = Pool(cfg.getint('FitnessTest', 'workers')).map
+        else:
+            self.map = map
         self.max_fitness_acheived = 0
 
     def new_solution(self):
-        def new_baseterm():
-            return BaseTerm(choice(BaseTerm.TERM_TYPES), innerMultiplier=uniform(-2.0, 2.0), outerMultiplier=uniform(-3.0, 3.0))
+        def random_term():
+            return createTerm('Random', innerMultiplier=uniform(-2.0, 2.0), outerMultiplier=uniform(-3.0, 3.0))
         s = Solution()
-        s.length_function = TermSet(init_terms=[new_baseterm()])
-        s.radiance_function = TermSet(init_terms=[new_baseterm()])
-        s.orientation_function = TermSet(init_terms=[new_baseterm()])
-        s.termination_function = TermSet(init_terms=[new_baseterm()])
+        s.length_function = Expression(init_terms=[random_term()])
+        s.radiance_function = Expression(init_terms=[random_term()])
+        s.orientation_function = Expression(init_terms=[random_term()])
+        s.termination_function = Expression(init_terms=[random_term()])
         return s
 
     def evolve(self):
         self.generation = self.generation + 1
         # keep the best few
         candidates = sorted(self.solutions, key=lambda s: s.fitness)[:3]
-        # candidates.extend([new_solution() for n in range(2)])
         # keep and mutate the best few from previous round
-        self.solutions = self.pool.map(mutate, [copy.deepcopy(c) for c in candidates])
+        try:
+            self.solutions = self.map(mutate, [copy.deepcopy(c) for c in candidates])
+        except KeyboardInterrupt:
+            pass
         # keep the best few from previous round unmutated
         # solutions.extend([copy.deepcopy(c) for c in candidates])
         # mix up the functions from the best few from previous round
         self.solutions.extend([self.combine(s1, s2) for s1 in candidates for s2 in candidates for n in range(1)])
 
     def combine(self, s1, s2):
-        sn = Solution(s1)
+        sn = Solution()
         sn.length_function = copy.deepcopy(s1.length_function) if random() > 0.5 else copy.deepcopy(s2.length_function)
         sn.radiance_function = copy.deepcopy(s1.radiance_function) if random() > 0.5 else copy.deepcopy(s2.radiance_function)
         sn.orientation_function = copy.deepcopy(s1.orientation_function) if random() > 0.5 else copy.deepcopy(s2.orientation_function)
@@ -50,12 +57,14 @@ class Generation(object):
         return sn
 
     def solve(self):
-        # self.pool.
-        self.solutions = map(solve, self.solutions)  # compute point-sets and fitnesses
-        self.fittest = max(self.solutions, key=lambda s: s.fitness)
+        try:
+            self.solutions = self.map(solve, self.solutions)  # compute point-sets and fitnesses
+            self.fittest = max(self.solutions, key=lambda s: s.fitness)
+        except KeyboardInterrupt:
+            pass
 
     def describe(self):
-        improvement = 0 if self.fittest.fitness == 0 else (self.fittest.fitness / self.max_fitness_acheived) - 1
+        improvement = 0 if self.max_fitness_acheived == 0 else (self.fittest.fitness / self.max_fitness_acheived) - 1
         if self.fittest.fitness > self.max_fitness_acheived or self.generation == 0:
             self.max_fitness_acheived = self.fittest.fitness
             p = Plot(self.fittest)
@@ -85,8 +94,3 @@ def solve(solution):
 
 def mutate(solution):
     return solution.mutate()
-
-if __name__ == "__main__":
-    g = Generation()
-    while True:
-        g.next_generation()

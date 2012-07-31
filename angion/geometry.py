@@ -1,6 +1,6 @@
-from math import hypot, sin, cos, pi
+from math import hypot, sin, cos, pi, log
 from sys import float_info
-import Config
+from config import cfg
 
 
 class Point(object):
@@ -11,15 +11,14 @@ class Point(object):
         self.x = int(x)
         self.y = int(y)
         self.solution = solution
-        self.configuration = solution.configuration
         self.depth = depth
         self.dist_to_origin = self._dist_to_origin()
         self.parent_orientation = parent_orientation
-        self.segment_count = 1 if self.depth % Config.get('Branch', 'every') else Config.get('Branch', 'segments')
+        self.segment_count = 1 if self.depth % cfg.getint('Branch', 'every') else cfg.getint('Branch', 'segments')
 
     def _dist_to_origin(self):
         try:
-            return min(Config.get('Plot', 'size'), hypot(self.x - Config.get('Fractal', 'origin_x'), self.y - Config.get('Fractal', 'origin_y')), key=abs)
+            return min(cfg.getint('Plot', 'size'), hypot(self.x - cfg.getint('Fractal', 'origin_x'), self.y - cfg.getint('Fractal', 'origin_y')), key=abs)
         except OverflowError:
             return float_info.max
 
