@@ -145,4 +145,4 @@ class Plot(object):
                 end = segment.end()
                 if end.x >= 0 and end.y >= 0 and end.x <= cfg.get('Plot', 'size') and end.y <= cfg.get('Plot', 'size'):
                     draw.line((point.x, point.y, end.x, end.y), fill=fill)
-        im.save("out." + str(seq) + ".png", "PNG")
+        im.save("output/out." + str(seq) + ".png", "PNG")
