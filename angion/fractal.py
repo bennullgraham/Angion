@@ -1,11 +1,10 @@
 from math import pi
 from geometry import Point
 from config import cfg
-import constants
 from PIL import Image, ImageDraw
 
 
-class Solution(object):
+class Fractal(object):
 
     def __init__(self):
         self.fitness = 0
@@ -83,8 +82,8 @@ class Solution(object):
 
 class OriginPoint(Point):
 
-    def __init__(self, solution):
-        self.solution = solution
+    def __init__(self, fractal):
+        self.fractal = fractal
         self.x = cfg.getfloat('Fractal', 'origin_x')
         self.y = cfg.getfloat('Fractal', 'origin_y')
         self.depth = 0
@@ -102,8 +101,8 @@ class OriginPoint(Point):
 class Plot(object):
     segments = []
 
-    def __init__(self, solution):
-        self.solution = solution
+    def __init__(self, fractal):
+        self.fractal = fractal
 
     def draw(self, seq):
         # (0,150,255) [0x0096ff] -> (42,22,69) [0x45162a]
@@ -127,7 +126,7 @@ class Plot(object):
             (cfg.getint('Plot', 'margin'), cfg.getint('Plot', 'margin'))),
             fill="rgb(24,12,54)"
         )
-        points = self.solution.point_set()
+        points = self.fractal.point_set()
         # sort by depth so oldest segments are drawn on top
         points.sort(key=lambda p: -p.depth)
 

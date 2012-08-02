@@ -1,5 +1,19 @@
-from angion.generation import Generation
+# from angion.generation import Generation
 
-g = Generation()
+# g = Generation()
+# while True:
+#     g.next_generation()
+
+from angion.fractal import Fractal
+from angion.expression import Expression
+import angion.db as db
+
+f = Fractal()
+f.length_function = Expression()
+f.radiance_function = Expression()
+f.orientation_function = Expression()
+f.termination_function = Expression()
+
+db.create()
 while True:
-    g.next_generation()
+	db.store(f)

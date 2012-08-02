@@ -1,4 +1,4 @@
-from math import hypot, sin, cos, pi, log
+from math import hypot, sin, cos, pi
 from sys import float_info
 from config import cfg
 
@@ -13,10 +13,10 @@ class Point(object):
     def __unicode__(self):
         return str(self.x) + ', ' + str(self.y)
 
-    def __init__(self, x, y, solution, depth, parent_orientation):
+    def __init__(self, x, y, fractal, depth, parent_orientation):
         self.x = int(x)
         self.y = int(y)
-        self.solution = solution
+        self.fractal = fractal
         self.depth = depth
         self.dist_to_origin = self._dist_to_origin()
         self.parent_orientation = parent_orientation
@@ -30,11 +30,11 @@ class Point(object):
 
     def radiance(self):
         dist = self.dist_to_origin
-        return self.solution.radiance_function.f(dist) % (2 * pi)
+        return self.fractal.radiance_function.f(dist) % (2 * pi)
 
     def orientation(self):
         dist = self.dist_to_origin
-        delta = self.solution.orientation_function.f(dist)
+        delta = self.fractal.orientation_function.f(dist)
         return (self.parent_orientation + delta) % (2 * pi)
 
     def segments(self):
@@ -57,22 +57,22 @@ class Point(object):
     def terminate(self):
         try:
             dist = self.dist_to_origin
-            return self.solution.termination_function.f(dist) < self.depth
+            return self.fractal.termination_function.f(dist) < self.depth
         except OverflowError:
             return True
 
 
 class Segment(object):
     def __init__(self, base, angle):
-        self.solution = base.solution
+        self.fractal = base.fractal
         self.base = base
         self.angle = angle
 
     def length(self):
         dist = self.base.dist_to_origin
-        return abs(self.solution.length_function.f(dist))
+        return abs(self.fractal.length_function.f(dist))
 
     def end(self):
         x = self.base.x + self.length() * cos(self.angle)
         y = self.base.y + self.length() * sin(self.angle)
-        return Point(x, y, self.solution, self.base.depth + 1, self.angle)
+        return Point(x, y, self.fractal, self.base.depth + 1, self.angle)
