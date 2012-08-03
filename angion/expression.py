@@ -58,11 +58,11 @@ class TermPrototype(object):
         self.outerMultiplier = outerMultiplier
 
     def __unicode__(self):
-        return self.formatString().format(outer=float(self.outerMultiplier), inner=float(self.innerMultiplier))
+        return self.formatString.format(outer=float(self.outerMultiplier), inner=float(self.innerMultiplier))
 
     def f(self, x):
         try:
-            fx = self._f()(self.innerMultiplier, self.outerMultiplier, x)
+            fx = self._f(self.innerMultiplier, self.outerMultiplier, x)
         except OverflowError:
             # return largest float with correct sign
             i_sign = copysign(1, self.innerMultiplier)
@@ -84,35 +84,23 @@ class TermPrototype(object):
 
 
 class ExponentialTerm(TermPrototype):
-    def formatString(self):
-        return '{outer:.2}e^({inner:.2}x)'
-
-    def _f(self):
-        return lambda i, o, x: o * (x ** i)
+    formatString = '{outer:.2}e^({inner:.2}x)'
+    _f = lambda i, o, x: o * (x ** i)
 
 
 class LinearTerm(TermPrototype):
-    def formatString(self):
-        return '({outer:.2}*{inner:.2})x'
-
-    def _f(self):
-        return lambda i, o, x: o * i * x
+    formatString = '({outer:.2}*{inner:.2})x'
+    _f = lambda i, o, x: o * i * x
 
 
 class TrigonometricTerm(TermPrototype):
-    def formatString(self):
-        return '{outer:.2}sin({inner:.2}x)'
-
-    def _f(self):
-        return lambda i, o, x: o * sin(i * x)
+    formatString = '{outer:.2}sin({inner:.2}x)'
+    _f = lambda i, o, x: o * sin(i * x)
 
 
 class ConstantTerm(TermPrototype):
-    def formatString(self):
-        return '{outer:.2}+{inner:.2}'
-
-    def _f(self):
-        return lambda i, o, x: o + i
+    formatString = '{outer:.2}+{inner:.2}'
+    _f = lambda i, o, x: o + i
 
 
 def createTerm(type, innerMultiplier=1.0, outerMultiplier=1.0):

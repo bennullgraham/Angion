@@ -49,36 +49,6 @@ class Fractal(object):
         segments = recurse(origin)
         return segments
 
-    def solve(self):
-        margin = cfg.getint('Plot', 'margin')
-        size = cfg.getint('Plot', 'size')
-        spacing = cfg.getint('FitnessTest', 'service_grid_spacing')
-
-        def in_bounds(p):
-            if p.x < margin or p.x > (size - margin):
-                return False
-            if p.y < margin or p.y > (size - margin):
-                return False
-            return True
-
-        def service_level(eval_point):
-            return min([(eval_point[0] - p.x) ** 2 + (eval_point[1] - p.y) ** 2 for p in valid_point_set])
-
-        point_set = self.point_set(1)
-        valid_point_set = filter(in_bounds, point_set)
-
-        eval_set = [(x, y)
-            for x in range(margin, size - margin, spacing)
-            for y in range(margin, size - margin, spacing)
-        ]
-        self.service_penalty = float(sum(map(service_level, eval_set)) / len(eval_set))
-        self.length_penalty = 1.0  # max(1.0, (self.total_length / len(point_set)))
-        self.complexity_penalty = 1.0  # int(max(0, len(point_set))) ** 2
-        self.bounds_penalty = max(1, (len(point_set) - len(valid_point_set)) * 100) ** 2
-        self.fitness = 1.0 / (self.service_penalty + self.length_penalty + self.complexity_penalty + self.bounds_penalty)
-
-        return self
-
 
 class OriginPoint(Point):
 

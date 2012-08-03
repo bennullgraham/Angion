@@ -1,15 +1,16 @@
 import sqlite3 as db
 import cPickle as pickle
-from config import cfg
+from angion.fractal import Fractal
 
 c = db.connect("angion.db")
+
 
 def create():
     with c:
         cur = c.cursor()
 
         cur.execute("""CREATE TABLE IF NOT EXISTS fractals(
-            id INTEGER PRIMARY KEY, 
+            id INTEGER PRIMARY KEY,
             length_function TEXT,
             radiance_function TEXT,
             orientation_function TEXT,
@@ -33,33 +34,16 @@ def create():
 
         c.commit()
 
-def store(fractal):
-    # functions = {
-    #     'length': fractal.length_function,
-    #     'radiance': fractal.radiance_function,
-    #     'orientation': fractal.orientation_function,
-    #     'termination': fractal.termination_function
-    # }
 
-    # # turn four functions times their two inner/outer multipliers 
-    # # into an 8x dict for db storage
-    # field_map = dict([(f + '_' + position, getattr(functions[f], position+'Multiplier')) for f in functions.keys() for position in ('inner', 'outer')])
-    # with c:
-    #     cur = c.cursor()
-    #     c.execute("INSERT INTO fractals " +
-    #         "(" + field_map.keys().join(', ') + ", inverse_fitness)" +
-    #         " VALUES (" + 
-    #             [':'+k for k in field_map.keys()].join(', ')+", :inverse_fitness);",
-    #         field_map)
-
-    #with c:
+def inter(fractal):
+    with c:
         cur = c.cursor()
         query = """INSERT INTO fractals
             (length_function, radiance_function, orientation_function, termination_function, inverse_fitness)
             VALUES
             (:length_function, :radiance_function, :orientation_function, :termination_function, :inverse_fitness);"""
 
-        c.execute(query, {
+        cur.execute(query, {
             'length_function': pickle.dumps(fractal.length_function),
             'radiance_function': pickle.dumps(fractal.radiance_function),
             'orientation_function': pickle.dumps(fractal.orientation_function),
@@ -71,6 +55,19 @@ def store(fractal):
 
         cur.execute("SELECT COUNT(id) FROM fractals")
         c.commit()
-        row = cur.fetchone()
-        print row
 
+
+def unearth(id):
+    f = Fractal()
+    with c:
+        cur = c.cursor()
+        cur.execute("SELECT * FROM fractals WHERE id=:id", {'id': id})
+        c.commit()
+        row = cur.fetchone()
+        f.length_function = pickle.loads(row[1].encode('utf-8'))
+        f.radiance_function = pickle.loads(row[2].encode('utf-8'))
+        f.orientation_function = pickle.loads(row[3].encode('utf-8'))
+        f.termination_function = pickle.loads(row[4].encode('utf-8'))
+        f.inverse_fitness = (1 / row[5]) - 1
+
+        return f
