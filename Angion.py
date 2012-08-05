@@ -1,8 +1,8 @@
-from angion.generation import Generation
+import angion.pool
 
-g = Generation()
-while True:
-    g.next_generation()
+# g = Generation()
+# while True:
+#     g.next_generation()
 
 # from angion.fractal import Fractal
 # from angion.expression import Expression

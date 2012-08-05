@@ -1,7 +1,7 @@
 import ConfigParser
 
 cfg = ConfigParser.ConfigParser()
-cfg.add_section('FitnessTest')
+cfg.add_section('Solver')
 cfg.add_section('Fractal')
 cfg.add_section('Plot')
 cfg.add_section('Branch')

@@ -1,6 +1,8 @@
 from math import pi
 from geometry import Point
 from config import cfg
+from expression import Expression
+from string import join
 from PIL import Image, ImageDraw
 
 
@@ -10,13 +12,27 @@ class Fractal(object):
         self.fitness = 0
         self.total_length = None
 
-    def mutate(self):
-        self.length_function.mutate()
-        self.radiance_function.mutate()
-        self.orientation_function.mutate()
-        self.termination_function.mutate()
-        return self
+        self.length_function = Expression()
+        self.radiance_function = Expression()
+        self.orientation_function = Expression()
+        self.termination_function = Expression()
 
+        self.functions = {
+            'len': self.length_function,
+            'rad': self.radiance_function,
+            'orn': self.orientation_function,
+            'trm': self.termination_function
+        }
+
+    def __cmp__(self, other):
+        return cmp(self.fitness, other.fitness)
+
+    def __unicode__(self):
+        f = self.functions
+        expressions = map(lambda k: k + ': ' + f[k].__unicode__(), f.keys())
+        expressions += ("fitness: " + str(self.fitness),)
+        return join(expressions, "  |  ")
+    
     def point_set(self, every=1):
         self.total_length = 1
         origin = OriginPoint(self)

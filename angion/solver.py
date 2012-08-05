@@ -4,7 +4,7 @@ from config import cfg
 def solve(fractal):
     margin = cfg.getint('Plot', 'margin')
     size = cfg.getint('Plot', 'size')
-    spacing = cfg.getint('FitnessTest', 'service_grid_spacing')
+    spacing = cfg.getint('Solver', 'service_grid_spacing')
 
     def in_bounds(p):
         if p.x < margin or p.x > (size - margin):

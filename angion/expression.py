@@ -1,14 +1,15 @@
 import sys
-from random import choice, random, uniform
+from random import choice, random, uniform, seed
 from math import sin, copysign
 from config import cfg
 
+seed()
+
 
 class Expression(object):
-    def __init__(self, init_terms=[]):
-        self.terms = init_terms
-        if not self.terms:
-            self._add_term()
+    def __init__(self):
+        self.terms = []
+        self._add_term()
 
     def __unicode__(self):
         from string import join
@@ -45,8 +46,8 @@ class Expression(object):
 
         # modify some term constants
         if self.terms:
-            while mutate_count < cfg.getint('Mutation', 'number_of_terms'):
-                if random() > cfg.getfloat('Mutation', 'probability'):
+            while mutate_count < cfg.getint('Mutator', 'number_of_terms'):
+                if random() > cfg.getfloat('Mutator', 'probability'):
                     t = choice(self.terms)
                     t.mutate()
                 mutate_count += 1
@@ -77,7 +78,7 @@ class TermPrototype(object):
         return fx
 
     def mutate(self):
-        variability = cfg.getfloat('Mutation', 'variability')
+        variability = cfg.getfloat('Mutator', 'variability')
         self.innerMultiplier += uniform(-variability, variability)
         self.outerMultiplier += uniform(-variability, variability)
         return self
@@ -85,34 +86,34 @@ class TermPrototype(object):
 
 class ExponentialTerm(TermPrototype):
     formatString = '{outer:.2}e^({inner:.2}x)'
-    _f = lambda i, o, x: o * (x ** i)
+    _f = lambda self, i, o, x: o * (x ** i)
 
 
 class LinearTerm(TermPrototype):
     formatString = '({outer:.2}*{inner:.2})x'
-    _f = lambda i, o, x: o * i * x
+    _f = lambda self, i, o, x: o * i * x
 
 
 class TrigonometricTerm(TermPrototype):
     formatString = '{outer:.2}sin({inner:.2}x)'
-    _f = lambda i, o, x: o * sin(i * x)
+    _f = lambda self, i, o, x: o * sin(i * x)
 
 
 class ConstantTerm(TermPrototype):
     formatString = '{outer:.2}+{inner:.2}'
-    _f = lambda i, o, x: o + i
+    _f = lambda self, i, o, x: o + i
 
 
-def createTerm(type, innerMultiplier=1.0, outerMultiplier=1.0):
+def createTerm(term_type, innerMultiplier=1.0, outerMultiplier=1.0):
     terms = {
         'Trigonometric': TrigonometricTerm,
         'Linear': LinearTerm,
         'Exponential': ExponentialTerm,
         'Constant': ConstantTerm,
     }
-    if type == 'Random':
-        type = choice(terms.keys())
-    e = terms[type]()
+    if term_type == 'Random':
+        term_type = choice(terms.keys())
+    e = terms[term_type]()
     e.innerMultiplier = innerMultiplier
     e.outerMultiplier = outerMultiplier
     return e
