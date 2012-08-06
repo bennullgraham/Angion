@@ -1,6 +1,6 @@
 import sys
 from random import choice, random, uniform, seed
-from math import sin, copysign
+from math import sin, copysign, e
 from config import cfg
 
 seed()
@@ -79,14 +79,21 @@ class TermPrototype(object):
 
     def mutate(self):
         variability = cfg.getfloat('Mutator', 'variability')
-        self.innerMultiplier += uniform(-variability, variability)
-        self.outerMultiplier += uniform(-variability, variability)
+
+        def nonzero_variation():
+            while True:
+                v = uniform(-variability, variability)
+                if v != 0:
+                    return v
+
+        self.innerMultiplier += nonzero_variation()
+        self.outerMultiplier += nonzero_variation()
         return self
 
 
 class ExponentialTerm(TermPrototype):
     formatString = '{outer:.2}e^({inner:.2}x)'
-    _f = lambda self, i, o, x: o * (x ** i)
+    _f = lambda self, i, o, x: o * (e ** (x * i))
 
 
 class LinearTerm(TermPrototype):
