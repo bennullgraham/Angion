@@ -6,6 +6,10 @@ Running
 -------------------
 `python Angion.py`
 
+Config
+-------------------
+Create `settings.cfg` in the Angion root directory. See angion/default.cfg for possible options.
+
 Output
 --------------------
 In general, output only occurs when a generation improves on the current best.
