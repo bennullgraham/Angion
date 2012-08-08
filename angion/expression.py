@@ -96,8 +96,11 @@ class TermPrototype(object):
 
 
 class ExponentialTerm(TermPrototype):
+    # raising e to distance-to-originth power quickly explodes.
+    # we scale distance-to-origin by the size of the plot.
+    distScale = (1.0 / cfg.getint('Plot', 'size'))
     formatString = '{outer:.2}e^({inner:.2}x)'
-    _f = lambda self, i, o, x: o * (e ** (x * i))
+    _f = lambda self, i, o, x: o * (e ** (x * i * ExponentialTerm.distScale))
 
 
 class LinearTerm(TermPrototype):

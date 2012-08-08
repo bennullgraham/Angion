@@ -2,9 +2,10 @@ from Queue import PriorityQueue, Empty
 from heapq import heappush, heappop
 from multiprocessing import Queue, Process, cpu_count
 from fractal import Fractal
-import solver
-import mutator
+from solver import Solver
+from mutator import Mutator
 import time
+import os
 
 
 solveable = Queue()
@@ -13,25 +14,29 @@ solver_processes = []
 
 
 def worker_solve(solveable, mutateable):
+    s = Solver()
     while True:
         try:
             f = solveable.get(block=False)
-            solver.solve(f)
-            heappush(mutateable, f)
+            s.solve(f)
+            heappush(mutateable, (f.fitness, f))
         except Empty:
             time.sleep(0.1)
 
 
 def worker_mutate(solveable, mutateable):
-    while True:
-        if len(mutateable) >= 4:
-            fractals = [heappop(mutateable) for i in range(4)]
-            mutator.mutate(fractals)
-            for f in fractals:
-                solveable.put(f)
-        else:
-            time.sleep(10)
-        
+    m = Mutator()
+    # while True:
+    time.sleep(1)
+    if len(mutateable) >= 4:
+        fractals = [heappop(mutateable) for i in range(4)]
+        m.mutate(fractals)
+
+        for f in fractals:
+            solveable.put(f)
+    else:
+        time.sleep(10)
+
 
 def begin():
     # ensure solveable queue never empties
@@ -52,17 +57,35 @@ def begin():
     print "Running {n} solver processes".format(n=len(solver_processes))
 
     # mutator processes
-    for i in range(1):
-        p = Process(target=worker_mutate, args=(solveable, mutateable))
-        p.daemon = True
-        p.start()
+    # for i in range(1):
+    #     p = Process(target=worker_mutate, args=(solveable, mutateable))
+    #     p.daemon = True
+    #     p.start()
 
 
 begin()
 while True:
-    print "Solve  queue length: " + str(solveable.qsize())
-    print "Mutate queue length: " + str(len(mutateable))
-    time.sleep(1)
+    try:
+        worker_mutate
+        os.system('clear')
+        os.system('date')
+        print """
+                                                  
+                             `.                   
+   `..    `.. `..     `..         `..    `.. `..  
+ `..  `..  `..  `.. `..  `..`.. `..  `..  `..  `..
+`..   `..  `..  `..`..   `..`..`..    `.. `..  `..
+`..   `..  `..  `.. `..  `..`.. `..  `..  `..  `..
+  `.. `...`...  `..     `.. `..   `..    `...  `..
+                     `..                          
+"""
+        print "Solve queue length:  " + str(solveable.qsize())
+        print "Mutate queue length: " + str(len(mutateable))
+        time.sleep(1)
+    except KeyboardInterrupt:
+        os.system('clear')
+        print "Terminated"
+        break
     
 # while True:
 #     f = fractal.Fractal()
