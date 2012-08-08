@@ -35,6 +35,7 @@ def worker_mutate(solveable, mutateable, log):
         for n in range(8):
             fractals.append(mutateable.get(block=True))
         fractals = m.mutate(fractals)
+        log.put("Mutator best: %s" % fractals[0].fitness)
         for f in fractals:
             solveable.put(f)
         # log.put("Mutator: mutated %s fractals" % len(fractals))
@@ -100,9 +101,9 @@ def begin(*args):
                 for line in logs[:20]:
                     print line
                 if more > 0:
-                    print "(%s more lines)" % more
+                    print "\n(%s more lines)\n" % more
                 print "------------------------------------------------------------------"
-                time.sleep(1)
+                time.sleep(0.5)
         p = Process(target=output, args=(l,))
         p.daemon = True
         p.start()

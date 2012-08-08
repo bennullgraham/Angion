@@ -9,7 +9,7 @@ class Mutator(object):
 
     def mutate(self, (fractals)):
         fractals += [self.best, ]
-        sorted(fractals)
+        fractals = sorted(fractals, reverse=True)
         for f in fractals:
             f.length_function.mutate()
             f.radiance_function.mutate()
@@ -22,4 +22,5 @@ class Mutator(object):
             f.termination_function = choice(rpool).termination_function
 
         length = len(fractals) - 2
+        self.best = fractals[0] if fractals[0].fitness > self.best.fitness else self.best
         return fractals[:length]
