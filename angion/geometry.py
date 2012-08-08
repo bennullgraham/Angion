@@ -75,4 +75,8 @@ class Segment(object):
     def end(self):
         x = self.base.x + self.length() * cos(self.angle)
         y = self.base.y + self.length() * sin(self.angle)
+        l = self.length()
+        if l > 100:
+            print self.fractal.length_function.__unicode__()
+            print l
         return Point(x, y, self.fractal, self.base.depth + 1, self.angle)

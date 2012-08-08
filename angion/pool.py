@@ -1,4 +1,5 @@
 from Queue import PriorityQueue, Empty
+from heapq import heappush, heappop
 from multiprocessing import Queue, Process, cpu_count
 from fractal import Fractal
 import solver
@@ -7,7 +8,7 @@ import time
 
 
 solveable = Queue()
-mutateable = Queue()
+mutateable = []
 solver_processes = []
 
 
@@ -16,28 +17,21 @@ def worker_solve(solveable, mutateable):
         try:
             f = solveable.get(block=False)
             solver.solve(f)
-            mutateable.put(f)
+            heappush(mutateable, f)
         except Empty:
             time.sleep(0.1)
 
 
 def worker_mutate(solveable, mutateable):
     while True:
-        fractals = ()
-        try:
-            for i in range(4):
-                fractals += (mutateable.get(block=False),)
+        if len(mutateable) >= 4:
+            fractals = [heappop(mutateable) for i in range(4)]
             mutator.mutate(fractals)
             for f in fractals:
                 solveable.put(f)
-
-        except Empty:
-            # not enough fractals to mutate, so put any we're holding onto
-            # back in the queue and try again later.
-            for f in fractals:
-                mutateable.put(f)
-            time.sleep(0.1)
-
+        else:
+            time.sleep(10)
+        
 
 def begin():
     # ensure solveable queue never empties
@@ -67,7 +61,7 @@ def begin():
 begin()
 while True:
     print "Solve  queue length: " + str(solveable.qsize())
-    print "Mutate queue length: " + str(mutateable.qsize())
+    print "Mutate queue length: " + str(len(mutateable))
     time.sleep(1)
     
 # while True:

@@ -54,6 +54,10 @@ class Expression(object):
 
 
 class TermPrototype(object):
+
+    minimum = -cfg.getint('Function', 'maximum_magnitude')
+    maximum = cfg.getint('Function', 'maximum_magnitude')
+
     def __init__(self, innerMultiplier=1.0, outerMultiplier=1.0):
         self.innerMultiplier = innerMultiplier
         self.outerMultiplier = outerMultiplier
@@ -75,7 +79,7 @@ class TermPrototype(object):
         except ValueError:
             fx = 0
 
-        return fx
+        return sorted((TermPrototype.minimum, fx, TermPrototype.maximum))[1]
 
     def mutate(self):
         variability = cfg.getfloat('Mutator', 'variability')
