@@ -3,7 +3,6 @@ from config import cfg
 
 class Solver(object):
     def solve(self, fractal):
-
         margin = cfg.getint('Plot', 'margin')
         size = cfg.getint('Plot', 'size')
         spacing = cfg.getint('Solver', 'service_grid_spacing')
@@ -31,4 +30,5 @@ class Solver(object):
         fractal.bounds_penalty = max(1, (len(point_set) - len(valid_point_set)) * 100) ** 2
         fractal.fitness = 1.0 / (fractal.service_penalty + fractal.length_penalty + fractal.complexity_penalty + fractal.bounds_penalty)
 
+        # print "fitness: %s" % fractal.fitness
         return fractal

@@ -29,7 +29,7 @@ class Fractal(object):
 
     def __unicode__(self):
         f = self.functions
-        expressions = map(lambda k: k + ': ' + f[k].__unicode__(), f.keys())
+        expressions = map(lambda k: "%s: %s" % (k, f[k].__unicode__().ljust(14)[:14]), f.keys())
         expressions += ("fitness: " + str(self.fitness),)
         return join(expressions, "  |  ")
     

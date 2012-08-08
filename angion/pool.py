@@ -1,153 +1,108 @@
 from Queue import PriorityQueue, Empty
-from heapq import heappush, heappop
+# from heapq import heappush, heappop
 from multiprocessing import Queue, Process, cpu_count
+from threading import Thread, Lock
 from fractal import Fractal
 from solver import Solver
 from mutator import Mutator
 import time
 import os
 
-
+l = Queue()
 solveable = Queue()
-mutateable = []
+mutateable = Queue()
 solver_processes = []
 
+lock = Lock()
 
-def worker_solve(solveable, mutateable):
+
+def worker_solve(solveable, mutateable, log):
     s = Solver()
     while True:
         try:
             f = solveable.get(block=False)
             s.solve(f)
-            heappush(mutateable, (f.fitness, f))
+            log.put("Solver: solved   %s" % f.__unicode__())
+            mutateable.put(f)
         except Empty:
             time.sleep(0.1)
 
 
-def worker_mutate(solveable, mutateable):
+def worker_mutate(solveable, mutateable, log):
     m = Mutator()
-    # while True:
-    time.sleep(1)
-    if len(mutateable) >= 4:
-        fractals = [heappop(mutateable) for i in range(4)]
-        m.mutate(fractals)
-
+    while True:
+        fractals = []
+        for n in range(8):
+            fractals.append(mutateable.get(block=True))
+        fractals = m.mutate(fractals)
         for f in fractals:
             solveable.put(f)
-    else:
-        time.sleep(10)
+        # log.put("Mutator: mutated %s fractals" % len(fractals))
 
 
-def begin():
+def begin(*args):
     # ensure solveable queue never empties
     for i in range(1):
         def feeder(solveable):
             while True:
                 if solveable.qsize() < 10:
                     solveable.put(Fractal())
+                time.sleep(0.1)
         p = Process(target=feeder, args=(solveable,))
         p.start()
 
     # solver processes
     for i in range(cpu_count()):
-        p = Process(target=worker_solve, args=(solveable, mutateable))
+        p = Process(target=worker_solve, args=(solveable, mutateable, l))
         p.daemon = True
         p.start()
         solver_processes.append(p)
-    print "Running {n} solver processes".format(n=len(solver_processes))
+    l.put("Running %s solver processes" % len(solver_processes))
 
-    # mutator processes
-    # for i in range(1):
-    #     p = Process(target=worker_mutate, args=(solveable, mutateable))
-    #     p.daemon = True
-    #     p.start()
+    # mutator threads
+    for i in range(2):
+        p = Process(target=worker_mutate, args=(solveable, mutateable, l))
+        p.daemon = True
+        p.start()
 
-
-begin()
-while True:
-    try:
-        worker_mutate
-        os.system('clear')
-        os.system('date')
-        print """
-                                                  
-                             `.                   
-   `..    `.. `..     `..         `..    `.. `..  
- `..  `..  `..  `.. `..  `..`.. `..  `..  `..  `..
-`..   `..  `..  `..`..   `..`..`..    `.. `..  `..
-`..   `..  `..  `.. `..  `..`.. `..  `..  `..  `..
-  `.. `...`...  `..     `.. `..   `..    `...  `..
-                     `..                          
+    # output process
+    for i in range(1):
+        def output(log):
+            while True:
+                os.system('clear')
+                os.system('date')
+                print "\033[34m"
+                print """
+         _                   _             _               _          _            _
+        / /\                /\ \     _    /\ \            /\ \       /\ \         /\ \     _
+       / /  \              /  \ \   /\_\ /  \ \           \ \ \     /  \ \       /  \ \   /\_\\
+      / / /\ \            / /\ \ \_/ / // /\ \_\          /\ \_\   / /\ \ \     / /\ \ \_/ / /
+     / / /\ \ \          / / /\ \___/ // / /\/_/         / /\/_/  / / /\ \ \   / / /\ \___/ /
+    / / /  \ \ \        / / /  \/____// / / ______      / / /    / / /  \ \_\ / / /  \/____/
+   / / /___/ /\ \      / / /    / / // / / /\_____\    / / /    / / /   / / // / /    / / /
+  / / /_____/ /\ \    / / /    / / // / /  \/____ /   / / /    / / /   / / // / /    / / /
+ / /_________/\ \ \  / / /    / / // / /_____/ / /___/ / /__  / / /___/ / // / /    / / /
+/ / /_       __\ \_\/ / /    / / // / /______\/ //\__\/_/___\/ / /____\/ // / /    / / /
+\_\___\     /____/_/\/_/     \/_/ \/___________/ \/_________/\/_________/ \/_/     \/_/
+                                                                                              
 """
-        print "Solve queue length:  " + str(solveable.qsize())
-        print "Mutate queue length: " + str(len(mutateable))
-        time.sleep(1)
-    except KeyboardInterrupt:
-        os.system('clear')
-        print "Terminated"
-        break
-    
-# while True:
-#     f = fractal.Fractal()
-#     solveable.put(f)
-#     solveable.put(f)
-#     solveable.put(f)
-#     # print "added:  " + f.__unicode__()
-#     # print "apprx queue length: " + str(solveable.qsize())
-#     time.sleep(0.2)
-#     f = solveable.get()
-#     print f.__unicode__()
-#     break
-
-
-
-# solveable = Queue()
-# mutateable = PriorityQueue()
-
-# for i in range(20):
-#     f = fractal.create()
-#     print f.__unicode__()
-#     solveable.put(f)
-
-
-# def solved(fractal):
-#     mutateable.put(fractal)
-
-
-# def mutated((fractals)):
-#     for f in fractals:
-#         solveable.put(f)
-
-
-# def __solving_worker():
-#     while True:
-#         fractal = solveable.get(block=True)
-#         solver.solve(fractal)
-#         solved(fractal)
-#         solveable.task_done()
-
-
-# def __mutating_worker():
-#     while True:
-#         fractals = [mutateable.get(block=True) for i in range(4)]
-#         mutator.mutate(fractals)
-#         mutated(fractals)
-#         for i in range(len(fractals)):
-#             mutateable.task_done()
-
-# print "{jobs} solve jobs".format(jobs=solveable.qsize())
-
-# for i in range(cfg.getint('Solver', 'workers')):
-#     print "Beginning solver %i" % i
-#     worker = Process(target=__solving_worker)
-#     # worker.setDaemon(True)
-#     worker.start()
-
-# for i in range(cfg.getint('Mutator', 'workers')):
-#     print "Beginning mutator %i" % i
-#     worker = Thread(target=__mutating_worker)
-#     worker.setDaemon(True)
-#     worker.start()
-
-
-# time.sleep(10)
+                print "\033[0m"
+                print "Solve queue length:  %s" % str(solveable.qsize())
+                print "Mutate queue length: %s" % str(mutateable.qsize())
+                print "------------------------------------------------------------------"
+                logs = ()
+                try:
+                    while True:
+                        logs += (log.get(block=False), )
+                except Empty:
+                    pass
+                more = len(logs) - 20
+                for line in logs[:20]:
+                    print line
+                if more > 0:
+                    print "(%s more lines)" % more
+                print "------------------------------------------------------------------"
+                time.sleep(1)
+        p = Process(target=output, args=(l,))
+        p.daemon = True
+        p.start()

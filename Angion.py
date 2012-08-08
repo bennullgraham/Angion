@@ -1,4 +1,4 @@
-import angion.pool
+import angion
 
 # g = Generation()
 # while True:
