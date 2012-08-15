@@ -1,5 +1,6 @@
-from random import choice
+from random import random, choice
 from fractal import Fractal
+from copy import deepcopy
 
 
 class Mutator(object):
@@ -7,20 +8,32 @@ class Mutator(object):
         self.best = Fractal()
         self.best.fitness = 0
 
-    def mutate(self, (fractals)):
+    def biased_choice(self, f, fractals):
+            r = random()
+            if r < 0.5:
+                return self.best  # 50% chance to return best
+            if r < 0.75:
+                return f  # 25% chance to return self
+            if r < 1.0:
+                return choice(fractals)  # 25% chance to return random fractal from current pool
+
+    def mutate(self, fractals):
+
+        # print [str(f.fitness) for f in fractals]
         fractals += [self.best, ]
-        fractals = sorted(fractals, reverse=True)
         for f in fractals:
             f.length_function.mutate()
             f.radiance_function.mutate()
             f.orientation_function.mutate()
             f.termination_function.mutate()
-            rpool = fractals + [f, f, f, f]  # twice as likely to keep own function as get new
-            f.length_function = choice(rpool).length_function
-            f.radiance_function = choice(rpool).radiance_function
-            f.orientation_function = choice(rpool).orientation_function
-            f.termination_function = choice(rpool).termination_function
+            f.length_function = deepcopy(self.biased_choice(f, fractals).length_function)
+            f.radiance_function = deepcopy(self.biased_choice(f, fractals).radiance_function)
+            f.orientation_function = deepcopy(self.biased_choice(f, fractals).orientation_function)
+            f.termination_function = deepcopy(self.biased_choice(f, fractals).termination_function)
 
+        fractals = sorted(fractals, reverse=True)
         length = len(fractals) - 2
-        self.best = fractals[0] if fractals[0].fitness > self.best.fitness else self.best
+        if fractals[0].fitness > self.best.fitness:
+            self.best = deepcopy(fractals[0])
+
         return fractals[:length]
