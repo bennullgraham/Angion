@@ -32,7 +32,7 @@ class Fractal(object):
         expressions = map(lambda k: "%s: %s" % (k, f[k].__unicode__().ljust(14)[:14]), f.keys())
         expressions += ("fitness: " + str(self.fitness),)
         return join(expressions, "  |  ")
-    
+
     def point_set(self, every=1):
         self.total_length = 1
         origin = OriginPoint(self)
