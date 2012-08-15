@@ -12,11 +12,8 @@ Create `settings.cfg` in the Angion root directory. See angion/default.cfg for p
 
 Output
 --------------------
-In general, output only occurs when a generation improves on the current best.
+Every second, Angion displays a list of fractals that have been solved. Angion also writes out some basic statistics to `./stat`. These can be graphed like:
 
- - A series of out.*n*.png files will be created in the output directory. These are raster renderings of the fractals.
- - A series of out.*n*.json files will be created in the output directory. These are hierarchical JSON trees representing each point in the fractal.
- - A description of the functions defining the current best solution is printed to stdout
- - Every 1000 generations, the generation number is also printed, regardless of improvement
+    grep '^0' stat | awk '{print $2}' | gnuplot -persist <(echo "plot '<(cat -)' with lines")
 
-Output from previous runs currently isn't cleaned up, so you may want to invoke the program like: `rm output/out*{png,json} && python Angion.py`
+The integer part of the argument to `grep` singles out an individual mutator thread.
