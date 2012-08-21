@@ -83,10 +83,10 @@ class OriginPoint(Point):
         return 0
 
 
-def to_dict(fractal):
-    def functions_as_dict(fractal_obj):
+def to_dict(f_obj):
+    def functions_as_dict(f_obj):
         return dict(
-            [(k, terms_as_dict(v)) for k, v in fractal.functions.iteritems()]
+            [(k, terms_as_dict(v)) for k, v in f_obj.functions.iteritems()]
         )
 
     def terms_as_dict(func_obj):
@@ -101,8 +101,8 @@ def to_dict(fractal):
         }
 
     return {
-        'fitness': fractal.fitness,
-        'functions': functions_as_dict(fractal),
+        'fitness': f_obj.fitness,
+        'functions': functions_as_dict(f_obj),
     }
 
 
@@ -116,8 +116,6 @@ def from_dict(d):
     f.fitness = d['fitness']
     for k in f.functions.keys():
         f.functions[k] = expression.Expression()
-        # print as_terms(d['functions'][k]['terms'])
         f.functions[k].terms = as_terms(d['functions'][k]['terms'])
-        print f.functions[k].__unicode__()
 
     return f

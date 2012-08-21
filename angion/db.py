@@ -1,16 +1,15 @@
 from pymongo import Connection
-from angion.fractal import Fractal
+import fractal
 
 connection = Connection()
 fractals = connection.angion.fractals
 
 
-def as_dict
-
-
-def inter(fractal):
-    fractals.insert(fractal.as_dict())
+def inter(f):
+    f = fractal.to_dict(f)
+    return fractals.insert(f)
 
 
 def unearth(id):
-    return fractals.find_one({"_id": id})
+    f = fractals.find_one({"_id": id})
+    return fractal.from_dict(f)

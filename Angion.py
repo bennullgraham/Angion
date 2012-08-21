@@ -1,23 +1,11 @@
-import angion
+if __name__ == '__main__':
+    from angion import pool
+    import time
 
-# g = Generation()
-# while True:
-#     g.next_generation()
-
-# from angion.fractal import Fractal
-# from angion.expression import Expression
-# from angion.solver import solve
-# import angion.db as db
-
-# f = Fractal()
-# f.length_function = Expression()
-# f.radiance_function = Expression()
-# f.orientation_function = Expression()
-# f.termination_function = Expression()
-
-# db.create()
-# db.inter(f)
-# f = db.unearth(1)
-
-# solve(f)
-# print f.fitness
+    try:
+        #terminal.wrapper(pool.begin)
+        pool.begin()
+        while True:
+            time.sleep(1)
+    except KeyboardInterrupt:
+        print "Terminated"

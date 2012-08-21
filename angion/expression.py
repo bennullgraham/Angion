@@ -119,7 +119,6 @@ class ConstantTerm(TermPrototype):
 
 
 def createTerm(term_type, innerMultiplier=1.0, outerMultiplier=1.0):
-    print "creating with type %s, %f, %f" % (term_type, innerMultiplier, outerMultiplier)
     terms = {
         'Trigonometric': TrigonometricTerm,
         'Linear': LinearTerm,
