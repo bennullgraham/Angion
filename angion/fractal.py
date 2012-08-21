@@ -3,7 +3,6 @@ from geometry import Point
 from config import cfg
 from expression import Expression
 from string import join
-from PIL import Image, ImageDraw
 
 
 class Fractal(object):
@@ -23,15 +22,6 @@ class Fractal(object):
             'orn': self.orientation_function,
             'trm': self.termination_function
         }
-
-    def as_dict(self):
-        functions = dict([(k, v.as_dict()) for k, v in self.functions.iteritems()])
-        d = {
-            'functions': functions,
-            'fitness': self.fitness,
-        }
-        return d
-
 
     def __cmp__(self, other):
         return cmp(self.fitness, other.fitness)
@@ -93,58 +83,41 @@ class OriginPoint(Point):
         return 0
 
 
-class Plot(object):
-    segments = []
-
-    def __init__(self, fractal):
-        self.fractal = fractal
-
-    def draw(self, seq):
-        # (0,150,255) [0x0096ff] -> (42,22,69) [0x45162a]
-        def colour_lookup(ratio, shade=False):
-            r = 000 + (ratio * (42 - 000))
-            g = 150 + (ratio * (22 - 150))
-            b = 255 + (ratio * (69 - 255))
-            if shade:
-                r /= 3.0
-                g /= 3.0
-                b /= 3.0
-            return "rgb({},{},{})".format(int(r), int(g), int(b))
-
-        im = Image.new('RGBA', (cfg.getint('Plot', 'size'), cfg.getint('Plot', 'size')), (10, 4, 27, 255))
-        draw = ImageDraw.Draw(im)
-        draw.line((
-            (cfg.getint('Plot', 'margin'), cfg.getint('Plot', 'margin')),
-            (cfg.getint('Plot', 'margin'), cfg.getint('Plot', 'size') - cfg.getint('Plot', 'margin')),
-            (cfg.getint('Plot', 'size') - cfg.getint('Plot', 'margin'), cfg.getint('Plot', 'size') - cfg.getint('Plot', 'margin')),
-            (cfg.getint('Plot', 'size') - cfg.getint('Plot', 'margin'), cfg.getint('Plot', 'margin')),
-            (cfg.getint('Plot', 'margin'), cfg.getint('Plot', 'margin'))),
-            fill="rgb(24,12,54)"
+def to_dict(fractal):
+    def functions_as_dict(fractal_obj):
+        return dict(
+            [(k, terms_as_dict(v)) for k, v in fractal.functions.iteritems()]
         )
-        points = self.fractal.point_set()
-        # sort by depth so oldest segments are drawn on top
-        points.sort(key=lambda p: -p.depth)
 
-        # for point in points:
-        #     fill = colour_lookup(float(point.depth) / (points[0].depth + 1), shade=True)
-        #     service_x = (point.x // constants.SERVICE_GRID_SPACING) * constants.SERVICE_GRID_SPACING
-        #     service_y = (point.y // constants.SERVICE_GRID_SPACING) * constants.SERVICE_GRID_SPACING
-        #     draw.rectangle(
-        #         (service_x + 1, service_y + 1, service_x + constants.SERVICE_GRID_SPACING - 1, service_y + constants.SERVICE_GRID_SPACING - 1),
-        #         fill=fill  # "rgb(25,20,37,20)"
-        #     )
+    def terms_as_dict(func_obj):
+        return {
+            'terms': [
+                {
+                    'type': t.__class__.__name__,
+                    'inner': t.innerMultiplier,
+                    'outer': t.outerMultiplier,
+                } for t in func_obj.terms
+            ]
+        }
 
-        for point in points:
-            fill = colour_lookup(float(point.depth) / (points[0].depth + 1))
-            for segment in point.segments():
-                end = segment.end()
-                if end.x >= 0 and end.y >= 0 and end.x <= cfg.get('Plot', 'size') and end.y <= cfg.get('Plot', 'size'):
-                    draw.line((point.x, point.y, end.x, end.y), fill=fill)
-        im.save("output/out." + str(seq) + ".png", "PNG")
+    return {
+        'fitness': fractal.fitness,
+        'functions': functions_as_dict(fractal),
+    }
 
 
-def as_dict(fractal):
-    
+def from_dict(d):
+    import expression
 
+    def as_terms(terms_dict):
+        return [expression.createTerm(t['type'][:-4], t['inner'], t['outer']) for t in terms_dict]
 
-def as_fractal(dict):
+    f = Fractal()
+    f.fitness = d['fitness']
+    for k in f.functions.keys():
+        f.functions[k] = expression.Expression()
+        # print as_terms(d['functions'][k]['terms'])
+        f.functions[k].terms = as_terms(d['functions'][k]['terms'])
+        print f.functions[k].__unicode__()
+
+    return f

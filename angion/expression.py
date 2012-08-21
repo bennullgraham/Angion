@@ -11,9 +11,6 @@ class Expression(object):
         self.terms = []
         self._add_term()
 
-    def as_dict(self):
-        return {'terms': [t.as_dict() for t in self.terms()]}
-
     def __unicode__(self):
         from string import join
         return join(map(lambda s: s.__unicode__(), self.terms), ' + ')
@@ -67,12 +64,6 @@ class TermPrototype(object):
 
     def __unicode__(self):
         return self.formatString.format(outer=float(self.outerMultiplier), inner=float(self.innerMultiplier))
-
-    def as_dict(self):
-        return {
-            'inner': self.innerMultiplier,
-            'outer': self.outerMultiplier,
-        }
 
     def f(self, x):
         try:
@@ -128,6 +119,7 @@ class ConstantTerm(TermPrototype):
 
 
 def createTerm(term_type, innerMultiplier=1.0, outerMultiplier=1.0):
+    print "creating with type %s, %f, %f" % (term_type, innerMultiplier, outerMultiplier)
     terms = {
         'Trigonometric': TrigonometricTerm,
         'Linear': LinearTerm,
