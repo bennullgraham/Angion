@@ -5,6 +5,9 @@ connection = Connection()
 fractals = connection.angion.fractals
 
 
+def as_dict
+
+
 def inter(fractal):
     fractals.insert(fractal.as_dict())
 
