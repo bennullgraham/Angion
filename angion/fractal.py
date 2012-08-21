@@ -24,6 +24,15 @@ class Fractal(object):
             'trm': self.termination_function
         }
 
+    def as_dict(self):
+        functions = dict([(k, v.as_dict()) for k, v in self.functions.iteritems()])
+        d = {
+            'functions': functions,
+            'fitness': self.fitness,
+        }
+        return d
+
+
     def __cmp__(self, other):
         return cmp(self.fitness, other.fitness)
 
